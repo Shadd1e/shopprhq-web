@@ -474,7 +474,7 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
     if (!editProd) return
     setSaving(true)
     try {
-      await updateProduct(token, merchantId, editProd.client_id!, editProd.id, {
+      await updateProduct(token, merchantId, editProd.client_id ?? editProd._client?.id ?? '', editProd.id, {
         name: editForm.name || undefined,
         price: editForm.price ? +editForm.price : undefined,
         description: editForm.description || undefined,
