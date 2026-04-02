@@ -1,6 +1,11 @@
-const BASE =
-  process.env.NEXT_PUBLIC_API_URL ??
-  'https://ordaa-phase-one-production-765c.up.railway.app'
+function normaliseBase(url: string) {
+  const u = url.replace(/\/$/, '')
+  return u.startsWith('http://') || u.startsWith('https://') ? u : `https://${u}`
+}
+
+const BASE = normaliseBase(
+  process.env.NEXT_PUBLIC_API_URL ?? 'https://api.shopprhq.com'
+)
 
 // ── Core fetch ─────────────────────────────────────────────────────────────
 
