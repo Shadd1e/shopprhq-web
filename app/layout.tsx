@@ -20,6 +20,10 @@ const bricolage = Bricolage_Grotesque({
 })
 
 export const metadata: Metadata = {
+  icons: {
+    icon:  '/logo.png',
+    apple: '/logo.png',
+  },
   title: 'ShopprHQ — WhatsApp Commerce',
   description:
     'Turn your WhatsApp number into a full storefront. Customers browse, add to cart, and pay — all in the chat. Set up in 60 seconds.',
