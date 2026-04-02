@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '@/components/Logo'
@@ -31,6 +31,9 @@ function IconEye()      { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24
 function IconTruck()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> }
 function IconCheck()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><polyline points="20 6 9 17 4 12"/></svg> }
 function IconUser()     { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> }
+function IconPrint()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> }
+function IconChevron()  { return <svg className="w-4 h-4" viewBox="0 0 24 24" {...P}><polyline points="6 9 12 15 18 9"/></svg> }
+function IconHistory()  { return <svg className={S} viewBox="0 0 24 24" {...P}><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><polyline points="3 16 3.05 11 8 11"/></svg> }
 
 // ══════════════════════════════════════════════════════════════════════════
 // SHARED STYLES + UTILS
@@ -107,7 +110,7 @@ function Modal({ open, onClose, title, children }: {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4
         bg-ink/40 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
@@ -121,6 +124,179 @@ function Modal({ open, onClose, title, children }: {
         </div>
         <div className="px-6 py-5">{children}</div>
       </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RECEIPT PRINTING
+// ══════════════════════════════════════════════════════════════════════════
+
+function printReceipt(detail: OrderDetail) {
+  const win = window.open('', '_blank', 'width=420,height=680')
+  if (!win) return
+  win.document.write(`<!DOCTYPE html><html><head><title>Receipt #${detail.order_code}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:monospace;font-size:13px;padding:24px;max-width:320px;margin:0 auto}
+    .c{text-align:center}.b{font-weight:bold}.lg{font-size:18px}
+    .div{border-top:1px dashed #555;margin:10px 0}
+    .row{display:flex;justify-content:space-between;padding:3px 0}
+    .sm{font-size:11px;color:#555}
+    @media print{@page{margin:8mm}}
+  </style></head><body>
+  <div class="c b lg">ShopprHQ</div>
+  ${detail.store_name ? `<div class="c sm">${detail.store_name}</div>` : ''}
+  <div class="div"></div>
+  <div class="c b">ORDER #${detail.order_code}</div>
+  <div class="c sm">${detail.created_at ? new Date(detail.created_at).toLocaleString('en-NG') : ''}</div>
+  <div class="div"></div>
+  <div class="row"><span>Customer</span><span class="b">${detail.customer_name || '—'}</span></div>
+  <div class="row"><span>Phone</span><span>${detail.user_id}</span></div>
+  <div class="row"><span>Payment</span><span class="b" style="text-transform:capitalize">${detail.payment_method}</span></div>
+  ${detail.delivery_address ? `<div class="row"><span>Delivery</span><span>${detail.delivery_address}</span></div>` : ''}
+  <div class="div"></div>
+  <div class="b" style="margin-bottom:6px">Items</div>
+  ${detail.items.map(i => `<div class="row"><span>${i.product_name} ×${i.quantity}</span><span>₦${i.subtotal.toLocaleString()}</span></div>`).join('')}
+  <div class="div"></div>
+  <div class="row b lg"><span>TOTAL</span><span>₦${detail.total_amount.toLocaleString()}</span></div>
+  ${detail.delivery_fee ? `<div class="row sm"><span>incl. delivery fee</span><span>₦${detail.delivery_fee.toLocaleString()}</span></div>` : ''}
+  <div class="div"></div>
+  <div class="c sm">Status: ${detail.status.replace(/_/g,' ')}</div>
+  <div class="c sm" style="margin-top:12px">Thank you for your order!</div>
+  <script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}<\/script>
+  </body></html>`)
+  win.document.close()
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// HISTORY VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+function HistoryView({ orders, onClose, onOrderClick }: {
+  orders: Order[]
+  onClose: () => void
+  onOrderClick: (id: string) => void
+}) {
+  const [expandedDay, setExpandedDay] = useState<string | null>(null)
+
+  const days = useMemo(() => {
+    const map = new Map<string, Order[]>()
+    for (const o of orders) {
+      const key = o.created_at
+        ? new Date(o.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })
+        : 'Unknown date'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(o)
+    }
+    return Array.from(map.entries())
+      .sort((a, b) => {
+        const ta = a[1][0]?.created_at ? new Date(a[1][0].created_at).getTime() : 0
+        const tb = b[1][0]?.created_at ? new Date(b[1][0].created_at).getTime() : 0
+        return tb - ta
+      })
+      .map(([label, dayOrders]) => {
+        const sorted = [...dayOrders].sort((a, b) =>
+          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+        )
+        const revenue = dayOrders
+          .filter(o => ['PAID','FULFILLED'].includes(o.status))
+          .reduce((s, o) => s + o.total_amount, 0)
+        return { label, orders: sorted, revenue, count: dayOrders.length }
+      })
+  }, [orders])
+
+  const totalRevenue = days.reduce((s, d) => s + d.revenue, 0)
+  const totalOrders  = orders.length
+
+  return (
+    <div className="fixed inset-0 z-50 bg-bg overflow-y-auto">
+      {/* Header */}
+      <header className="bg-white border-b border-border sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-5 h-16 flex items-center gap-4">
+          <button onClick={onClose}
+            className="flex items-center gap-2 text-sm font-semibold text-ink-3 hover:text-ink
+              px-3 py-2 rounded-xl hover:bg-bg transition-colors -ml-3">
+            ← Back
+          </button>
+          <h1 className="font-display font-extrabold text-lg text-ink tracking-tight flex-1">
+            Revenue History
+          </h1>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-5 py-8 space-y-6">
+        {/* Summary */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white border border-border rounded-2xl p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-2">All-time Revenue</p>
+            <p className="font-display font-extrabold text-2xl text-ink tracking-tight">{fmt(totalRevenue)}</p>
+          </div>
+          <div className="bg-white border border-border rounded-2xl p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-2">Total Orders</p>
+            <p className="font-display font-extrabold text-2xl text-ink tracking-tight">{totalOrders}</p>
+          </div>
+        </div>
+
+        {/* Day list */}
+        {days.length === 0 ? (
+          <div className="bg-white border border-border rounded-3xl py-16 text-center">
+            <p className="text-sm text-ink-4">No order history yet.</p>
+          </div>
+        ) : (
+          <div className="bg-white border border-border rounded-3xl overflow-hidden">
+            {days.map((day, i) => (
+              <div key={day.label} className={cn(i > 0 && 'border-t border-border')}>
+                {/* Day header */}
+                <button
+                  onClick={() => setExpandedDay(expandedDay === day.label ? null : day.label)}
+                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-bg/50
+                    transition-colors text-left">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">{day.label}</p>
+                    <p className="text-xs text-ink-4 mt-0.5">
+                      {day.count} order{day.count !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-display font-bold text-base text-ink">{fmt(day.revenue)}</span>
+                    <span className={cn('text-ink-4 transition-transform',
+                      expandedDay === day.label && 'rotate-180')}>
+                      <IconChevron />
+                    </span>
+                  </div>
+                </button>
+
+                {/* Expanded orders */}
+                {expandedDay === day.label && (
+                  <div className="border-t border-border bg-bg/40 divide-y divide-border">
+                    {day.orders.map(o => (
+                      <div key={o.id} onClick={() => onOrderClick(o.id)}
+                        className="px-6 py-3.5 flex items-center gap-4 hover:bg-bg
+                          transition-colors cursor-pointer">
+                        <span className="font-mono text-xs font-semibold text-ink bg-white border
+                          border-border px-2.5 py-1 rounded-lg shrink-0">
+                          {o.order_code}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-ink truncate">
+                            {o.customer_name || o.user_id}
+                          </p>
+                          <p className="text-xs text-ink-4 mt-0.5">{timeAgo(o.created_at)}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-ink shrink-0">
+                          {fmt(o.total_amount)}
+                        </span>
+                        <StatusBadge status={o.status} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   )
 }
@@ -957,11 +1133,12 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
 // PROFILE DROPDOWN
 // ══════════════════════════════════════════════════════════════════════════
 
-function ProfileDropdown({ profile, resendLoading, resendDone, onResend, onLogout }: {
+function ProfileDropdown({ profile, resendLoading, resendDone, onResend, onHistory, onLogout }: {
   profile: MerchantProfile | null
   resendLoading: boolean
   resendDone: boolean
   onResend: () => void
+  onHistory: () => void
   onLogout: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -1024,9 +1201,16 @@ function ProfileDropdown({ profile, resendLoading, resendDone, onResend, onLogou
           )}
 
           <button
+            onClick={() => { setOpen(false); onHistory() }}
+            className="w-full flex items-center gap-2.5 px-5 py-3.5 text-sm font-semibold
+              text-ink-3 hover:text-ink hover:bg-bg transition-colors border-t border-border"
+          >
+            <IconHistory /> Revenue history
+          </button>
+          <button
             onClick={() => { setOpen(false); onLogout() }}
             className="w-full text-left px-5 py-3.5 text-sm font-semibold text-red-600
-              hover:bg-red-50 transition-colors"
+              hover:bg-red-50 transition-colors border-t border-border"
           >
             Sign out
           </button>
@@ -1063,6 +1247,7 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
   const [resendDone,    setResendDone]    = useState(false)
   const [loadError,     setLoadError]     = useState('')
   const [merchantId,    setMerchantId]    = useState('')
+  const [historyOpen,   setHistoryOpen]   = useState(false)
   const [detail,        setDetail]        = useState<OrderDetail | null>(null)
   const [detailOpen,    setDetailOpen]    = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -1144,6 +1329,7 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
             resendLoading={resendLoading}
             resendDone={resendDone}
             onResend={handleResend}
+            onHistory={() => setHistoryOpen(true)}
             onLogout={onLogout}
           />
         </div>
@@ -1210,6 +1396,15 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
         )}
       </main>
 
+      {/* Revenue history overlay */}
+      {historyOpen && (
+        <HistoryView
+          orders={orders}
+          onClose={() => setHistoryOpen(false)}
+          onOrderClick={(id) => { openOrderDetail(id) }}
+        />
+      )}
+
       {/* Shared order detail modal */}
       <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Order detail">
         {detailLoading || !detail ? (
@@ -1271,6 +1466,12 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
                   {actionLoading === detail.id + 'dispatch' ? 'Dispatching…' : 'Mark out for delivery'}
                 </button>
               )}
+              <button onClick={() => printReceipt(detail)}
+                className="flex items-center gap-2 text-sm font-semibold text-ink-3 border
+                  border-border px-4 py-2.5 rounded-xl hover:text-ink hover:border-ink-4
+                  transition-all">
+                <IconPrint /> Print receipt
+              </button>
             </div>
           </div>
         )}
