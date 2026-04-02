@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
 import { DM_Sans, Bricolage_Grotesque } from 'next/font/google'
 import './globals.css'
-import DoodleBackground from '@/components/DoodleBackground'
+import dynamic from 'next/dynamic'
+
+const DoodleBackground = dynamic(() => import('@/components/DoodleBackground'), { ssr: false })
 
 const dmSans = DM_Sans({
   subsets: ['latin'],

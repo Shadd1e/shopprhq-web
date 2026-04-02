@@ -293,7 +293,7 @@ export default function StoreDashboardPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen">
 
       {/* Top bar */}
       <header className="bg-white border-b border-border sticky top-0 z-40">

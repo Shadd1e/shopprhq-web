@@ -935,7 +935,7 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-5">
+    <div className="min-h-screen flex items-center justify-center p-5">
       <div className="w-full max-w-sm py-8">
         <div className="flex justify-center mb-8"><Logo /></div>
         <div className="bg-white rounded-3xl border border-border shadow-lg p-9">
@@ -1483,7 +1483,7 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
   }
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen">
       {/* Top bar */}
       <header className="bg-white border-b border-border sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between gap-4">

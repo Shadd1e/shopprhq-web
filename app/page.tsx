@@ -45,32 +45,26 @@ const steps = [
 
 const features = [
   {
-    icon: '🤖',
     title: 'AI-powered ordering',
     body:  'Natural language understanding turns casual messages into structured orders — no confusing menus or commands.',
   },
   {
-    icon: '💳',
     title: 'Card & cash payments',
-    body:  'Customers pay by card via Flutterwave or cash on delivery. Payouts hit your bank account directly.',
+    body:  'Customers pay by card or cash on delivery. Payouts hit your bank account directly.',
   },
   {
-    icon: '📲',
     title: 'Real-time order alerts',
     body:  'Every order, confirmation, and low-stock warning goes straight to your operator number on WhatsApp.',
   },
   {
-    icon: '📦',
     title: 'Inventory management',
     body:  'Track stock levels in real time. Get automated low-stock warnings before you sell out.',
   },
   {
-    icon: '🏪',
     title: 'Multi-store support',
     body:  'One merchant account, multiple WhatsApp storefronts. Manage everything from a single dashboard.',
   },
   {
-    icon: '📊',
     title: 'Orders dashboard',
     body:  'See every order, its status, and total revenue at a glance. Know what\'s moving and what\'s sitting.',
   },
@@ -98,7 +92,7 @@ export default function LandingPage() {
   useReveal()
 
   return (
-    <div className="min-h-screen bg-bg overflow-x-hidden">
+    <div className="min-h-screen overflow-x-hidden">
 
       {/* ════════════════════════════════════════════
           NAV
@@ -125,7 +119,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard"
-              className="hidden sm:block text-sm font-semibold text-ink-2 px-4 py-2 rounded-xl
+              className="text-sm font-semibold text-ink-2 px-4 py-2 rounded-xl
                 hover:bg-border/70 transition-colors"
             >
               Sign in
@@ -146,13 +140,6 @@ export default function LandingPage() {
       ════════════════════════════════════════════ */}
       <section className="pt-20 pb-28 px-5 text-center">
         <div className="max-w-3xl mx-auto">
-
-          {/* Live badge */}
-          <div className="inline-flex items-center gap-2.5 bg-white border border-border rounded-full
-            px-4 py-1.5 text-sm font-medium text-ink-3 mb-10 shadow-sm">
-            <span className="w-2 h-2 rounded-full bg-wa shrink-0 animate-pulse-dot" />
-            WhatsApp Commerce · Nigeria
-          </div>
 
           {/* Headline */}
           <h1 className="font-display font-extrabold text-[clamp(2.6rem,7vw,4.5rem)]
@@ -266,39 +253,15 @@ export default function LandingPage() {
             {features.map((f, i) => (
               <div
                 key={f.title}
-                className="reveal bg-white border border-border rounded-3xl p-7 group
+                className="reveal bg-white border border-border rounded-3xl p-7
                   hover:shadow-lg hover:-translate-y-1.5 transition-all duration-300"
                 style={{ transitionDelay: `${i * 70}ms` }}
               >
-                <div className="w-12 h-12 bg-bg border border-border rounded-2xl
-                  flex items-center justify-center text-2xl mb-6
-                  group-hover:scale-105 transition-transform duration-300">
-                  {f.icon}
-                </div>
                 <h3 className="font-display font-bold text-[1.05rem] text-ink mb-2.5 tracking-tight">
                   {f.title}
                 </h3>
                 <p className="text-sm text-ink-3 leading-relaxed">{f.body}</p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════════════════════════════════════════
-          SOCIAL PROOF / TRUST STRIP
-      ════════════════════════════════════════════ */}
-      <section className="py-16 px-5 bg-white border-y border-border">
-        <div className="max-w-4xl mx-auto text-center reveal">
-          <p className="text-sm font-medium text-ink-4 mb-8">
-            Built for Nigerian commerce
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-8 text-ink-4">
-            {['WhatsApp Business API', 'Flutterwave Payments', 'Brevo Email', 'Railway Cloud'].map((b) => (
-              <span key={b} className="text-sm font-semibold border border-border
-                px-5 py-2.5 rounded-full bg-bg">
-                {b}
-              </span>
             ))}
           </div>
         </div>
@@ -347,7 +310,7 @@ export default function LandingPage() {
             <div>
               <Logo dark />
               <p className="text-sm text-white/35 mt-3 max-w-xs leading-relaxed">
-                WhatsApp commerce infrastructure for Nigerian businesses.
+                Turn your WhatsApp number into a real storefront.
               </p>
             </div>
             <div className="flex flex-wrap gap-x-8 gap-y-4 text-sm text-white/40">
@@ -364,10 +327,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-white/25">© 2025 ShopprHQ · RACHWIN · Nigeria</p>
-            <p className="text-xs text-white/20">
-              Powered by WhatsApp Business API
-            </p>
+            <p className="text-xs text-white/25">© 2025 ShopprHQ</p>
           </div>
         </div>
       </footer>

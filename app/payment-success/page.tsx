@@ -10,7 +10,7 @@ function PaymentContent() {
   const isSuccess = !status || status === 'successful' || status === 'completed'
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-5">
+    <div className="min-h-screen flex items-center justify-center p-5">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <Logo />
@@ -74,7 +74,7 @@ function PaymentContent() {
 export default function PaymentSuccessPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-bg flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="skeleton w-16 h-16 rounded-full" />
       </div>
     }>

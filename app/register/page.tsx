@@ -52,7 +52,7 @@ function ErrorBox({ msg }: { msg: string }) {
 
 function SuccessCard({ mid, email }: { mid: string; email: string }) {
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-5">
+    <div className="min-h-screen flex items-center justify-center p-5">
       <div className="w-full max-w-md py-8">
         <div className="flex justify-center mb-8">
           <Logo />
@@ -163,7 +163,7 @@ export default function RegisterPage() {
   if (success) return <SuccessCard {...success} />
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-5">
+    <div className="min-h-screen flex items-center justify-center p-5">
       <div className="w-full max-w-[26rem] py-8">
 
         <div className="flex justify-center mb-8">
