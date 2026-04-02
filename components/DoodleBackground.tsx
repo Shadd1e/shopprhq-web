@@ -135,6 +135,36 @@ function Percent() {
   )
 }
 
+function Tag() {
+  return (
+    <g {...S}>
+      <path d="M2,-20 L18,-4 L2,16 L-14,16 L-14,-20 Z" />
+      <circle cx="-6" cy="-10" r="3.5" fill="none" />
+    </g>
+  )
+}
+
+function Gift() {
+  return (
+    <g {...S}>
+      <rect x="-18" y="-2" width="36" height="24" rx="2" />
+      <line x1="-18" y1="8" x2="18" y2="8" />
+      <line x1="0" y1="-2" x2="0" y2="22" />
+      <path d="M0,-2 C0,-2 -10,-14 -6,-18 C-2,-22 4,-16 0,-2" />
+      <path d="M0,-2 C0,-2 10,-14 6,-18 C2,-22 -4,-16 0,-2" />
+    </g>
+  )
+}
+
+function Diamond() {
+  return (
+    <g {...S}>
+      <path d="M0,-22 L18,-4 L0,18 L-18,-4 Z" />
+      <path d="M-18,-4 L0,4 L18,-4" />
+    </g>
+  )
+}
+
 // ── Placed scene ───────────────────────────────────────────────────────────
 
 export default function DoodleBackground() {
@@ -147,38 +177,87 @@ export default function DoodleBackground() {
         className="opacity-[0.09]"
       >
         {/* ── Top band ── */}
+        <g transform="translate(60,100) rotate(-12) scale(0.7)"><Tag /></g>
         <g transform="translate(120,130) rotate(-8) scale(1.1)"><Bag /></g>
+        <g transform="translate(200,55) rotate(18) scale(0.6)"><Sparkle /></g>
         <g transform="translate(290,78) rotate(22) scale(0.7)"><Sparkle /></g>
+        <g transform="translate(365,110) rotate(-5) scale(0.75)"><Diamond /></g>
         <g transform="translate(440,95) rotate(14)"><PriceTag /></g>
+        <g transform="translate(540,60) rotate(-20) scale(0.6)"><Sparkle /></g>
         <g transform="translate(630,72) rotate(-5) scale(0.9)"><Star /></g>
+        <g transform="translate(720,115) rotate(10) scale(0.65)"><Gift /></g>
         <g transform="translate(830,125) rotate(-10) scale(0.95)"><Cart /></g>
+        <g transform="translate(930,62) rotate(28) scale(0.6)"><Tag /></g>
         <g transform="translate(1030,68) rotate(32) scale(0.65)"><Sparkle /></g>
+        <g transform="translate(1120,120) rotate(-7) scale(0.8)"><Diamond /></g>
         <g transform="translate(1210,105) rotate(16) scale(0.9)"><Coin /></g>
+        <g transform="translate(1310,55) rotate(40) scale(0.6)"><Sparkle /></g>
         <g transform="translate(1390,135) rotate(-12) scale(0.8)"><Receipt /></g>
+
+        {/* ── Upper-mid band ── */}
+        <g transform="translate(45,260) rotate(6) scale(0.72)"><Card /></g>
+        <g transform="translate(200,290) rotate(-16) scale(0.65)"><ArrowUp /></g>
+        <g transform="translate(345,248) rotate(30) scale(0.6)"><Sparkle /></g>
+        <g transform="translate(500,275) rotate(-8) scale(0.8)"><Check /></g>
+        <g transform="translate(660,255) rotate(12) scale(0.7)"><Percent /></g>
+        <g transform="translate(800,285) rotate(-24) scale(0.65)"><Sparkle /></g>
+        <g transform="translate(950,260) rotate(8) scale(0.78)"><Box /></g>
+        <g transform="translate(1095,245) rotate(-14) scale(0.7)"><Star /></g>
+        <g transform="translate(1240,282) rotate(22) scale(0.65)"><Coin /></g>
+        <g transform="translate(1395,255) rotate(-6) scale(0.72)"><Card /></g>
 
         {/* ── Middle band ── */}
         <g transform="translate(88,455) rotate(8) scale(0.85)"><ArrowUp /></g>
+        <g transform="translate(185,430) rotate(-30) scale(0.6)"><Tag /></g>
         <g transform="translate(275,425) rotate(-14) scale(0.85)"><Card /></g>
+        <g transform="translate(385,465) rotate(36) scale(0.6)"><Sparkle /></g>
         <g transform="translate(490,475) rotate(11) scale(0.9)"><Box /></g>
+        <g transform="translate(590,432) rotate(-8) scale(0.7)"><Gift /></g>
         <g transform="translate(690,405) rotate(42) scale(0.7)"><Sparkle /></g>
+        <g transform="translate(785,460) rotate(-15) scale(0.75)"><Diamond /></g>
         <g transform="translate(880,465) rotate(-9) scale(1.05)"><Percent /></g>
+        <g transform="translate(980,428) rotate(25) scale(0.65)"><Sparkle /></g>
         <g transform="translate(1070,415) rotate(18) scale(1.1)"><Bag /></g>
+        <g transform="translate(1175,458) rotate(-10) scale(0.7)"><Check /></g>
         <g transform="translate(1270,455) rotate(13) scale(0.7)"><Sparkle /></g>
+        <g transform="translate(1370,432) rotate(-18) scale(0.75)"><Tag /></g>
         <g transform="translate(1430,405) rotate(-22) scale(0.85)"><PriceTag /></g>
 
+        {/* ── Lower-mid band ── */}
+        <g transform="translate(50,615) rotate(-10) scale(0.7)"><Coin /></g>
+        <g transform="translate(190,630) rotate(15) scale(0.65)"><Sparkle /></g>
+        <g transform="translate(330,608) rotate(-5) scale(0.78)"><ArrowUp /></g>
+        <g transform="translate(480,625) rotate(20) scale(0.7)"><Gift /></g>
+        <g transform="translate(625,610) rotate(-28) scale(0.65)"><Diamond /></g>
+        <g transform="translate(770,632) rotate(8) scale(0.72)"><Receipt /></g>
+        <g transform="translate(915,612) rotate(-12) scale(0.68)"><Star /></g>
+        <g transform="translate(1055,628) rotate(32) scale(0.6)"><Sparkle /></g>
+        <g transform="translate(1195,608) rotate(-6) scale(0.75)"><Cart /></g>
+        <g transform="translate(1355,625) rotate(14) scale(0.7)"><Box /></g>
+
         {/* ── Bottom band ── */}
+        <g transform="translate(55,820) rotate(-14) scale(0.65)"><Sparkle /></g>
         <g transform="translate(155,740) rotate(9) scale(0.72)"><Sparkle /></g>
+        <g transform="translate(255,808) rotate(18) scale(0.7)"><Tag /></g>
         <g transform="translate(360,760) rotate(-14) scale(0.9)"><Check /></g>
+        <g transform="translate(465,835) rotate(-8) scale(0.65)"><Diamond /></g>
         <g transform="translate(570,705) rotate(10) scale(0.85)"><Star /></g>
+        <g transform="translate(668,842) rotate(28) scale(0.6)"><Sparkle /></g>
         <g transform="translate(770,752) rotate(-6) scale(0.95)"><Cart /></g>
+        <g transform="translate(868,830) rotate(-20) scale(0.68)"><Gift /></g>
         <g transform="translate(970,722) rotate(-19) scale(0.85)"><Coin /></g>
+        <g transform="translate(1068,848) rotate(12) scale(0.65)"><Sparkle /></g>
         <g transform="translate(1160,770) rotate(7) scale(0.8)"><Receipt /></g>
+        <g transform="translate(1270,828) rotate(-16) scale(0.7)"><PriceTag /></g>
         <g transform="translate(1380,718) rotate(-11) scale(0.9)"><Box /></g>
 
         {/* ── Extras scattered ── */}
         <g transform="translate(580,265) rotate(-18) scale(0.75)"><PriceTag /></g>
         <g transform="translate(1130,255) rotate(20) scale(0.7)"><Sparkle /></g>
         <g transform="translate(740,330) rotate(-6) scale(0.8)"><Card /></g>
+        <g transform="translate(350,540) rotate(22) scale(0.65)"><Coin /></g>
+        <g transform="translate(1050,540) rotate(-15) scale(0.7)"><ArrowUp /></g>
+        <g transform="translate(700,580) rotate(8) scale(0.6)"><Sparkle /></g>
       </svg>
     </div>
   )

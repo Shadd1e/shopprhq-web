@@ -42,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${dmSans.variable} ${bricolage.variable}`}>
       <body className="font-sans bg-bg text-ink antialiased">
         <DoodleBackground />
-        {children}
+        <div className="relative z-[1]">{children}</div>
       </body>
     </html>
   )

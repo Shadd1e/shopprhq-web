@@ -34,7 +34,9 @@ function IconUser()     { return <svg className={S} viewBox="0 0 24 24" {...P}><
 function IconPrint()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> }
 function IconChevron()  { return <svg className="w-4 h-4" viewBox="0 0 24 24" {...P}><polyline points="6 9 12 15 18 9"/></svg> }
 function IconHistory()  { return <svg className={S} viewBox="0 0 24 24" {...P}><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><polyline points="3 16 3.05 11 8 11"/></svg> }
-function IconMail()    { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> }
+function IconMail()     { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> }
+function IconUpload()   { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> }
+function IconDownload() { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
 
 // ══════════════════════════════════════════════════════════════════════════
 // SHARED STYLES + UTILS
@@ -486,15 +488,49 @@ function Row({ label, value, capitalize }: { label: string; value: string; capit
 // INVENTORY TAB
 // ══════════════════════════════════════════════════════════════════════════
 
+type CsvRow = { name: string; price: string; description: string; category: string; initial_stock: string }
+type CsvResult = { row: number; name: string; ok: boolean; error?: string }
+
+function parseCSV(text: string): CsvRow[] {
+  const lines = text.trim().split(/\r?\n/)
+  if (lines.length < 2) return []
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''))
+  const idx = (col: string) => header.indexOf(col)
+  return lines.slice(1).filter(l => l.trim()).map(line => {
+    const cols = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, ''))
+    return {
+      name:          cols[idx('name')]          ?? '',
+      price:         cols[idx('price')]         ?? '',
+      description:   cols[idx('description')]   ?? '',
+      category:      cols[idx('category')]      ?? '',
+      initial_stock: cols[idx('initial_stock')] ?? '0',
+    }
+  })
+}
+
+function downloadTemplate() {
+  const csv = 'name,price,description,category,initial_stock\nJollof Rice (large),1500,Full plate with chicken,Food,50\nChilled Coke,400,,Drinks,100\n'
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = 'inventory_template.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
+
 function InventoryTab({ products, clients, loading, token, merchantId, onRefresh }: {
   products: Product[]; clients: Client[]; loading: boolean
   token: string; merchantId: string; onRefresh: () => void
 }) {
-  const [addOpen,  setAddOpen]  = useState(false)
-  const [editProd, setEditProd] = useState<Product | null>(null)
-  const [saving,   setSaving]   = useState(false)
-  const [addErr,   setAddErr]   = useState('')
-  const [editErr,  setEditErr]  = useState('')
+  const [addOpen,    setAddOpen]    = useState(false)
+  const [csvOpen,    setCsvOpen]    = useState(false)
+  const [editProd,   setEditProd]   = useState<Product | null>(null)
+  const [saving,     setSaving]     = useState(false)
+  const [addErr,     setAddErr]     = useState('')
+  const [editErr,    setEditErr]    = useState('')
+  const [csvResults, setCsvResults] = useState<CsvResult[] | null>(null)
+  const [csvImporting, setCsvImporting] = useState(false)
+  const [csvClientId,  setCsvClientId]  = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const [addForm, setAddForm] = useState({
     name: '', price: '', description: '', category: '', initial_stock: '0', client_id: '',
@@ -576,6 +612,45 @@ function InventoryTab({ products, clients, loading, token, merchantId, onRefresh
     } finally { setSaving(false) }
   }
 
+  async function handleCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const text = await file.text()
+    const rows = parseCSV(text)
+    if (rows.length === 0) return
+    const clientId = csvClientId || clients[0]?.id
+    if (!clientId) return
+    setCsvImporting(true)
+    setCsvResults(null)
+    const results: CsvResult[] = []
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]
+      if (!r.name.trim() || !r.price || isNaN(+r.price) || +r.price <= 0) {
+        results.push({ row: i + 2, name: r.name || '(blank)', ok: false, error: 'Missing name or invalid price' })
+        continue
+      }
+      try {
+        await createProduct(token, merchantId, clientId, {
+          name:          r.name.trim(),
+          price:         +r.price,
+          description:   r.description  || undefined,
+          category:      r.category     || undefined,
+          initial_stock: +r.initial_stock || 0,
+        })
+        results.push({ row: i + 2, name: r.name, ok: true })
+      } catch (err: any) {
+        results.push({ row: i + 2, name: r.name, ok: false, error: err.detail ?? 'Failed' })
+      }
+    }
+    setCsvResults(results)
+    setCsvImporting(false)
+    if (fileRef.current) fileRef.current.value = ''
+    if (results.some(r => r.ok)) onRefresh()
+  }
+
+  const csvOk   = csvResults?.filter(r => r.ok).length  ?? 0
+  const csvFail = csvResults?.filter(r => !r.ok).length ?? 0
+
   return (
     <>
       {/* Header row */}
@@ -583,14 +658,24 @@ function InventoryTab({ products, clients, loading, token, merchantId, onRefresh
         <p className="text-sm text-ink-4">
           {loading ? '—' : `${products.length} item${products.length !== 1 ? 's' : ''}`}
         </p>
-        <button
-          onClick={() => setAddOpen(true)}
-          className="flex items-center gap-2 bg-ink text-white text-sm font-semibold
-            px-4 py-2.5 rounded-xl hover:bg-ink-2 transition-all hover:-translate-y-px"
-        >
-          <IconPlus />
-          Add item
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCsvOpen(true)}
+            className="flex items-center gap-1.5 border border-border bg-white text-ink-3 text-sm font-semibold
+              px-3.5 py-2.5 rounded-xl hover:text-ink hover:border-ink-4 transition-all"
+          >
+            <IconUpload />
+            Import CSV
+          </button>
+          <button
+            onClick={() => setAddOpen(true)}
+            className="flex items-center gap-2 bg-ink text-white text-sm font-semibold
+              px-4 py-2.5 rounded-xl hover:bg-ink-2 transition-all hover:-translate-y-px"
+          >
+            <IconPlus />
+            Add item
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-border rounded-3xl overflow-hidden">
@@ -699,6 +784,76 @@ function InventoryTab({ products, clients, loading, token, merchantId, onRefresh
             {saving ? 'Saving…' : 'Add item'}
           </button>
         </form>
+      </Modal>
+
+      {/* CSV import modal */}
+      <Modal open={csvOpen} onClose={() => { setCsvOpen(false); setCsvResults(null) }} title="Import inventory via CSV">
+        <div className="space-y-4">
+          <div className="bg-bg rounded-2xl px-4 py-3">
+            <p className="text-xs text-ink-3 leading-relaxed mb-3">
+              Upload a CSV file with columns: <span className="font-semibold text-ink">name, price, description, category, initial_stock</span>.
+              Name and price are required. Download the template to get started.
+            </p>
+            <button onClick={downloadTemplate}
+              className="flex items-center gap-1.5 text-xs font-semibold text-wa border border-wa/30
+                px-3 py-2 rounded-xl hover:bg-wa/5 transition-colors">
+              <IconDownload /> Download template
+            </button>
+          </div>
+
+          {clients.length > 1 && (
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-1.5">Import into store</label>
+              <select value={csvClientId} onChange={e => setCsvClientId(e.target.value)} className={INPUT}>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+              </select>
+            </div>
+          )}
+
+          <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
+            onChange={handleCsvFile} />
+
+          {!csvResults && (
+            <button
+              disabled={csvImporting}
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-border
+                rounded-2xl py-8 text-sm font-semibold text-ink-4 hover:border-wa hover:text-wa
+                transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {csvImporting
+                ? <><span className="animate-spin inline-block w-4 h-4 border-2 border-wa border-t-transparent rounded-full" /> Importing…</>
+                : <><IconUpload /> Choose CSV file</>
+              }
+            </button>
+          )}
+
+          {csvResults && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 text-sm font-semibold">
+                <span className="text-green-700">{csvOk} imported</span>
+                {csvFail > 0 && <span className="text-red-600">{csvFail} failed</span>}
+              </div>
+              <div className="max-h-48 overflow-y-auto divide-y divide-border rounded-2xl border border-border text-xs">
+                {csvResults.map(r => (
+                  <div key={r.row} className={cn('flex items-start gap-2 px-3 py-2', r.ok ? 'bg-green-50/50' : 'bg-red-50/50')}>
+                    <span className={cn('font-semibold shrink-0', r.ok ? 'text-green-700' : 'text-red-600')}>
+                      {r.ok ? '✓' : '✗'} Row {r.row}
+                    </span>
+                    <span className="text-ink truncate">{r.name}</span>
+                    {r.error && <span className="text-red-500 ml-auto shrink-0">{r.error}</span>}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="text-xs font-semibold text-ink-3 hover:text-ink underline"
+              >
+                Import another file
+              </button>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Edit item modal */}
