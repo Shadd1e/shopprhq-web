@@ -5,9 +5,10 @@ const BASE =
 // ── Core fetch ─────────────────────────────────────────────────────────────
 
 async function req<T>(path: string, options?: RequestInit): Promise<T> {
+  const { headers: optHeaders, ...restOptions } = options ?? {}
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
+    headers: { 'Content-Type': 'application/json', ...optHeaders },
+    ...restOptions,
   })
   const data = await res.json()
   if (!res.ok) throw { status: res.status, detail: data.detail ?? 'Something went wrong' }

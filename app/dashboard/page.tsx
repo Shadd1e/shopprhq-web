@@ -781,8 +781,9 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
         } catch {}
       }
       setProducts(allProds)
-    } catch {
-      onLogout()
+    } catch (err: any) {
+      if (err?.status === 401) onLogout()
+      // other errors (network, 5xx) — keep the user logged in, data just won't load
     } finally {
       setLoading(false)
     }
