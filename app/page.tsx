@@ -9,82 +9,77 @@ function useReveal() {
     const els = document.querySelectorAll<HTMLElement>('.reveal')
     const io = new IntersectionObserver(
       (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add('visible')),
-      { threshold: 0.12 },
+      { threshold: 0.1 },
     )
     els.forEach((el) => io.observe(el))
     return () => io.disconnect()
   }, [])
 }
 
+// ── Shared icon ────────────────────────────────────────────────────────────
+
+function ArrowRight({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 16 16">
+      <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.75"
+        strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 // ── Static data ────────────────────────────────────────────────────────────
 
 const stats = [
-  { value: '60s',  label: 'to set up'  },
-  { value: '<24h', label: 'to go live' },
-  { value: '₦0',   label: 'upfront'    },
-  { value: '1%',   label: 'per order'  },
+  { value: '60s',  label: 'to go live'   },
+  { value: '₦0',   label: 'upfront cost' },
+  { value: '1%',   label: 'per order'    },
+  { value: '24/7', label: 'AI handling orders' },
 ]
 
 const steps = [
   {
     n: '01',
-    title: 'Create your store',
-    body:  'Add your products, set prices, and write descriptions. Your full catalogue is ready in minutes — no dev needed.',
+    title: 'Build your catalogue',
+    body: 'Add products with names, prices, and descriptions. Your full storefront is ready in under a minute — no dev, no setup.',
   },
   {
     n: '02',
     title: 'Share your number',
-    body:  'Hand out your WhatsApp number. Customers message to browse, add to cart, and check out — all in the chat.',
+    body: 'Customers send a WhatsApp message to browse and order. The AI handles the conversation. No app, no link, just the chat.',
   },
   {
     n: '03',
-    title: 'Manage & get paid',
-    body:  'Orders land in your dashboard the moment they\'re placed. Get live alerts on your phone. Confirm, dispatch, done.',
+    title: 'Run your business',
+    body: 'Orders arrive in real time. Confirm, dispatch, and track payments from your dashboard. Always in control.',
   },
 ]
 
 const features = [
   {
-    title: 'AI-powered ordering',
-    body:  'Natural language understanding turns casual messages into structured orders — no confusing menus or commands.',
+    title: 'AI takes the orders',
+    body: 'Customers type naturally. ShopprHQ understands, structures, and confirms the order — automatically.',
   },
   {
-    title: 'Card & cash payments',
-    body:  'Customers pay by card or cash on delivery. Payouts hit your bank account directly.',
+    title: 'Two ways to pay',
+    body: 'Card or cash on delivery. Payouts go straight to your bank account.',
   },
   {
-    title: 'Real-time order alerts',
-    body:  'Every order, confirmation, and low-stock warning goes straight to your operator number on WhatsApp.',
+    title: 'Instant order alerts',
+    body: 'Every new order, payment, and status change hits your WhatsApp the moment it happens.',
   },
   {
-    title: 'Inventory management',
-    body:  'Track stock levels in real time. Get automated low-stock warnings before you sell out.',
+    title: 'Inventory that keeps up',
+    body: 'Track stock levels in real time. Get warned before you run out.',
   },
   {
-    title: 'Multi-store support',
-    body:  'One merchant account, multiple WhatsApp storefronts. Manage everything from a single dashboard.',
+    title: 'One account, many stores',
+    body: 'Manage multiple WhatsApp storefronts from a single merchant dashboard.',
   },
   {
-    title: 'Orders dashboard',
-    body:  'See every order, its status, and total revenue at a glance. Know what\'s moving and what\'s sitting.',
+    title: 'Know your numbers',
+    body: 'Daily revenue breakdowns, full order history, and printable receipts — all in one place.',
   },
 ]
-
-// ── Arrow icon ─────────────────────────────────────────────────────────────
-
-function ArrowRight({ className = 'w-4 h-4' }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 16 16">
-      <path
-        d="M3 8h10M9 4l4 4-4 4"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
@@ -102,33 +97,22 @@ export default function LandingPage() {
           <Logo />
 
           <div className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
-            <a
-              href="#how-it-works"
-              className="text-sm font-medium text-ink-3 hover:text-ink transition-colors"
-            >
+            <a href="#how-it-works" className="text-sm font-medium text-ink-3 hover:text-ink transition-colors">
               How it works
             </a>
-            <a
-              href="#features"
-              className="text-sm font-medium text-ink-3 hover:text-ink transition-colors"
-            >
+            <a href="#features" className="text-sm font-medium text-ink-3 hover:text-ink transition-colors">
               Features
             </a>
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              href="/dashboard"
-              className="text-sm font-semibold text-ink-2 px-4 py-2 rounded-xl
-                hover:bg-border/70 transition-colors"
-            >
+            <Link href="/dashboard"
+              className="text-sm font-semibold text-ink-2 px-4 py-2 rounded-xl hover:bg-border/70 transition-colors">
               Sign in
             </Link>
-            <Link
-              href="/register"
+            <Link href="/register"
               className="text-sm font-semibold bg-ink text-white px-4 py-2.5 rounded-xl
-                hover:bg-ink-2 transition-all duration-150 hover:-translate-y-px shadow-sm"
-            >
+                hover:bg-ink-2 transition-all duration-150 hover:-translate-y-px shadow-sm">
               Create store
             </Link>
           </div>
@@ -136,58 +120,50 @@ export default function LandingPage() {
       </nav>
 
       {/* ════════════════════════════════════════════
-          HERO
+          HERO  — doodle shows here (transparent bg)
       ════════════════════════════════════════════ */}
-      <section className="pt-20 pb-28 px-5 text-center">
+      <section className="pt-24 pb-32 px-5 text-center">
         <div className="max-w-3xl mx-auto">
 
-          {/* Headline */}
-          <h1 className="font-display font-extrabold text-[clamp(2.6rem,7vw,4.5rem)]
-            tracking-tight leading-[1.04] text-ink mb-7">
-            Stop losing orders<br />
-            <span className="text-wa-dark">to DMs.</span>
+          <h1 className="font-display font-extrabold text-[clamp(2.8rem,7.5vw,5rem)]
+            tracking-tight leading-[1.02] text-ink mb-7">
+            The store that lives<br />
+            <span className="text-wa-dark">in WhatsApp.</span>
           </h1>
 
-          {/* Sub */}
           <p className="text-[1.1rem] sm:text-xl text-ink-3 leading-relaxed
-            max-w-[30rem] mx-auto mb-11 font-normal">
-            ShopprHQ turns your WhatsApp number into a real storefront.
-            Customers browse, cart, and pay — without leaving the chat.
+            max-w-[32rem] mx-auto mb-12 font-normal">
+            Your customers order in the chat.
+            You manage inventory, confirm orders, and track revenue — from one clean dashboard.
           </p>
 
-          {/* CTA row */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link
-              href="/register"
+            <Link href="/register"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2
-                bg-wa text-white font-semibold text-base px-7 py-3.5 rounded-2xl
+                bg-wa text-white font-semibold text-base px-8 py-3.5 rounded-2xl
                 shadow-wa hover:bg-wa-dark hover:shadow-wa-lg
-                transition-all duration-200 hover:-translate-y-0.5"
-            >
+                transition-all duration-200 hover:-translate-y-0.5">
               Create your free store
               <ArrowRight />
             </Link>
-            <a
-              href="#how-it-works"
+            <a href="#how-it-works"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2
-                bg-white text-ink-2 font-semibold text-base px-7 py-3.5 rounded-2xl
-                border border-border shadow-sm
-                hover:border-ink-4 hover:shadow-md
-                transition-all duration-200 hover:-translate-y-0.5"
-            >
+                bg-white text-ink-2 font-semibold text-base px-8 py-3.5 rounded-2xl
+                border border-border shadow-sm hover:border-ink-4 hover:shadow-md
+                transition-all duration-200 hover:-translate-y-0.5">
               See how it works
             </a>
           </div>
 
-          {/* Stats strip */}
-          <div className="max-w-xl mx-auto mt-16 grid grid-cols-2 sm:grid-cols-4
-            bg-border gap-px rounded-2xl overflow-hidden border border-border shadow-md">
+          {/* Stats */}
+          <div className="max-w-xl mx-auto mt-20 grid grid-cols-2 sm:grid-cols-4
+            bg-border gap-px rounded-2xl overflow-hidden border border-border shadow-sm">
             {stats.map((s) => (
-              <div key={s.value} className="bg-white px-4 py-5 text-center">
+              <div key={s.value} className="bg-white/90 backdrop-blur-sm px-4 py-5 text-center">
                 <p className="font-display font-extrabold text-[1.65rem] tracking-tight text-ink">
                   {s.value}
                 </p>
-                <p className="text-[11px] text-ink-4 mt-0.5 font-medium">{s.label}</p>
+                <p className="text-[11px] text-ink-4 mt-0.5 font-medium leading-snug">{s.label}</p>
               </div>
             ))}
           </div>
@@ -195,7 +171,7 @@ export default function LandingPage() {
       </section>
 
       {/* ════════════════════════════════════════════
-          HOW IT WORKS
+          HOW IT WORKS  — dark, no doodle
       ════════════════════════════════════════════ */}
       <section id="how-it-works" className="py-28 px-5 bg-ink">
         <div className="max-w-5xl mx-auto">
@@ -212,20 +188,18 @@ export default function LandingPage() {
 
           <div className="grid sm:grid-cols-3 gap-5">
             {steps.map((step, i) => (
-              <div
-                key={step.n}
-                className="reveal bg-white/[.05] border border-white/[.09] rounded-3xl p-8
+              <div key={step.n}
+                className="reveal bg-white/[.05] border border-white/[.08] rounded-3xl p-8
                   hover:bg-white/[.08] transition-colors duration-300"
-                style={{ transitionDelay: `${i * 90}ms` }}
-              >
-                <p className="font-display font-extrabold text-[3.5rem] leading-none
-                  text-white/[.08] mb-5 tracking-tight select-none">
+                style={{ transitionDelay: `${i * 90}ms` }}>
+                <p className="font-display font-extrabold text-[3rem] leading-none
+                  text-white/[.07] mb-6 tracking-tight select-none">
                   {step.n}
                 </p>
-                <h3 className="font-display font-bold text-[1.15rem] text-white mb-3 tracking-tight">
+                <h3 className="font-display font-bold text-[1.1rem] text-white mb-3 tracking-tight">
                   {step.title}
                 </h3>
-                <p className="text-sm text-white/50 leading-relaxed">{step.body}</p>
+                <p className="text-sm text-white/45 leading-relaxed">{step.body}</p>
               </div>
             ))}
           </div>
@@ -233,9 +207,9 @@ export default function LandingPage() {
       </section>
 
       {/* ════════════════════════════════════════════
-          FEATURES
+          FEATURES  — doodle shows here (transparent bg)
       ════════════════════════════════════════════ */}
-      <section id="features" className="py-28 px-5 bg-bg">
+      <section id="features" className="py-28 px-5">
         <div className="max-w-5xl mx-auto">
 
           <div className="text-center mb-16 reveal">
@@ -249,15 +223,13 @@ export default function LandingPage() {
             </h2>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map((f, i) => (
-              <div
-                key={f.title}
-                className="reveal bg-white border border-border rounded-3xl p-7
-                  hover:shadow-lg hover:-translate-y-1.5 transition-all duration-300"
-                style={{ transitionDelay: `${i * 70}ms` }}
-              >
-                <h3 className="font-display font-bold text-[1.05rem] text-ink mb-2.5 tracking-tight">
+              <div key={f.title}
+                className="reveal bg-white border border-border rounded-3xl px-7 py-6
+                  hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+                style={{ transitionDelay: `${i * 60}ms` }}>
+                <h3 className="font-display font-bold text-[1rem] text-ink mb-2 tracking-tight">
                   {f.title}
                 </h3>
                 <p className="text-sm text-ink-3 leading-relaxed">{f.body}</p>
@@ -271,32 +243,26 @@ export default function LandingPage() {
           CTA BAND
       ════════════════════════════════════════════ */}
       <section className="py-28 px-5 bg-wa-dark relative overflow-hidden">
-        {/* Radial glow */}
         <div className="absolute inset-0 pointer-events-none
-          bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(37,211,102,.2)_0%,transparent_70%)]" />
+          bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,rgba(37,211,102,.18)_0%,transparent_70%)]" />
 
         <div className="relative max-w-2xl mx-auto text-center reveal">
-          <p className="text-[11px] font-bold uppercase tracking-[.14em] text-wa/70 mb-5">
-            Get started
-          </p>
           <h2 className="font-display font-extrabold text-[clamp(2rem,5vw,3.2rem)]
             tracking-tight text-white leading-tight mb-5">
             Ready to start<br />taking orders?
           </h2>
-          <p className="text-white/60 text-lg mb-10 leading-relaxed">
-            Your store is 60 seconds away.
+          <p className="text-white/55 text-lg mb-10 leading-relaxed">
+            Your store is live in under a minute.<br className="hidden sm:block" />
+            No setup fee. No card required.
           </p>
 
-          <Link
-            href="/register"
+          <Link href="/register"
             className="inline-flex items-center gap-2.5 bg-white text-wa-dark font-bold
               text-base px-8 py-4 rounded-2xl shadow-xl
-              hover:-translate-y-1 hover:shadow-2xl transition-all duration-200"
-          >
+              hover:-translate-y-1 hover:shadow-2xl transition-all duration-200">
             Create your free store
             <ArrowRight />
           </Link>
-          <p className="mt-5 text-white/35 text-sm">No credit card. No setup fee.</p>
         </div>
       </section>
 
@@ -309,7 +275,7 @@ export default function LandingPage() {
             justify-between gap-8 mb-10 pb-10 border-b border-white/10">
             <div>
               <Logo dark />
-              <p className="text-sm text-white/35 mt-3 max-w-xs leading-relaxed">
+              <p className="text-sm text-white/30 mt-3 max-w-xs leading-relaxed">
                 Turn your WhatsApp number into a real storefront.
               </p>
             </div>
@@ -318,19 +284,13 @@ export default function LandingPage() {
               <a href="#features"     className="hover:text-white/70 transition-colors">Features</a>
               <Link href="/register"  className="hover:text-white/70 transition-colors">Create store</Link>
               <Link href="/dashboard" className="hover:text-white/70 transition-colors">Sign in</Link>
-              <a
-                href="mailto:hello@shopprhq.com"
-                className="hover:text-white/70 transition-colors"
-              >
-                Contact
-              </a>
+              <a href="mailto:hello@shopprhq.com" className="hover:text-white/70 transition-colors">Contact</a>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-white/25">© 2025 ShopprHQ</p>
-          </div>
+          <p className="text-xs text-white/20">© 2025 ShopprHQ</p>
         </div>
       </footer>
+
     </div>
   )
 }

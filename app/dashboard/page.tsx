@@ -35,6 +35,7 @@ function IconPrint()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24
 function IconChevron()  { return <svg className="w-4 h-4" viewBox="0 0 24 24" {...P}><polyline points="6 9 12 15 18 9"/></svg> }
 function IconHistory()  { return <svg className={S} viewBox="0 0 24 24" {...P}><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><polyline points="3 16 3.05 11 8 11"/></svg> }
 function IconMail()     { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> }
+function IconBell()     { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> }
 function IconUpload()   { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> }
 function IconDownload() { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> }
 
@@ -1286,6 +1287,84 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// NOTIFICATION BELL
+// ══════════════════════════════════════════════════════════════════════════
+
+function NotificationBell({ clients }: { clients: Client[] }) {
+  const [open, setOpen] = useState(false)
+  const [message, setMessage] = useState('')
+  const [recipient, setRecipient] = useState('all')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  function handleClose() {
+    setOpen(false)
+    setTimeout(() => { setMessage(''); setRecipient('all'); setSent(false) }, 300)
+  }
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault()
+    if (!message.trim()) return
+    setSending(true)
+    // TODO: wire to notification API endpoint when available
+    await new Promise(r => setTimeout(r, 700))
+    setSent(true)
+    setSending(false)
+    setTimeout(handleClose, 1600)
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center justify-center w-9 h-9 rounded-xl
+          bg-bg border border-border text-ink-3 hover:text-ink hover:border-ink-4 transition-all"
+      >
+        <IconBell />
+      </button>
+
+      <Modal open={open} onClose={handleClose} title="Send notification">
+        {sent ? (
+          <div className="py-10 text-center space-y-3">
+            <div className="w-11 h-11 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-700">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <p className="font-semibold text-ink text-sm">Notification sent</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSend} className="space-y-4">
+            <FormField label="Send to">
+              <select value={recipient} onChange={e => setRecipient(e.target.value)} className={INPUT}>
+                <option value="all">All stores</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name || c.id}</option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Message">
+              <textarea
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                placeholder="e.g. We're restocking on Friday. Hold any pending orders."
+                rows={4}
+                className={cn(INPUT, 'resize-none')}
+              />
+            </FormField>
+            <button type="submit" disabled={sending || !message.trim()}
+              className="w-full bg-ink text-white font-semibold text-sm py-3 rounded-xl
+                hover:bg-ink-2 transition-all disabled:opacity-50">
+              {sending ? 'Sending…' : 'Send notification'}
+            </button>
+          </form>
+        )}
+      </Modal>
+    </>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // PROFILE DROPDOWN
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -1488,14 +1567,17 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
       <header className="bg-white border-b border-border sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between gap-4">
           <Logo size="sm" />
-          <ProfileDropdown
-            profile={profile}
-            resendLoading={resendLoading}
-            resendDone={resendDone}
-            onResend={handleResend}
-            onHistory={() => setHistoryOpen(true)}
-            onLogout={onLogout}
-          />
+          <div className="flex items-center gap-2">
+            <NotificationBell clients={clients} />
+            <ProfileDropdown
+              profile={profile}
+              resendLoading={resendLoading}
+              resendDone={resendDone}
+              onResend={handleResend}
+              onHistory={() => setHistoryOpen(true)}
+              onLogout={onLogout}
+            />
+          </div>
         </div>
       </header>
 
