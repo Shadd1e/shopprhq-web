@@ -852,20 +852,23 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
   const [loading, setLoading]  = useState(true)
   const [resendLoading, setResendLoading] = useState(false)
   const [resendDone,    setResendDone]    = useState(false)
-  const [loadError,     setLoadError]     = useState('')
-
-  const merchantId = typeof window !== 'undefined' ? localStorage.getItem('m_id') ?? '' : ''
+  const [loadError,   setLoadError]   = useState('')
+  const [merchantId,  setMerchantId]  = useState('')
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setLoadError('')
     try {
-      const [prof, clientList, orderList] = await Promise.all([
-        getMerchantProfile(token),
-        getClients(token),
-        getOrders(token, merchantId),
-      ])
+      // Get profile first — use prof.id as the authoritative merchant ID
+      const prof = await getMerchantProfile(token)
       setProfile(prof)
+      const mId = prof.id
+      setMerchantId(mId)
+
+      const [clientList, orderList] = await Promise.all([
+        getClients(token),
+        getOrders(token, mId),
+      ])
       setClients(clientList)
       setOrders(orderList)
 
@@ -873,7 +876,7 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
       const allProds: Product[] = []
       for (const c of clientList) {
         try {
-          const prods = await getInventory(token, merchantId, c.id)
+          const prods = await getInventory(token, mId, c.id)
           allProds.push(...prods.map(p => ({ ...p, _client: c })))
         } catch {}
       }
@@ -884,7 +887,7 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
     } finally {
       setLoading(false)
     }
-  }, [token, merchantId, onLogout])
+  }, [token, onLogout])
 
   useEffect(() => { loadData() }, [loadData])
 
