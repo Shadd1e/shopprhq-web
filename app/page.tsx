@@ -32,7 +32,7 @@ function ArrowRight({ className = 'w-4 h-4' }: { className?: string }) {
 const stats = [
   { value: '60s',  label: 'to go live'   },
   { value: '₦0',   label: 'upfront cost' },
-  { value: '1%',   label: 'per order'    },
+  { value: '<1%',  label: 'per order'    },
   { value: '24/7', label: 'AI handling orders' },
 ]
 
