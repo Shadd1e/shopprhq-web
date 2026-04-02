@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '@/components/Logo'
@@ -29,6 +29,7 @@ function IconEdit()     { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24
 function IconEye()      { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> }
 function IconTruck()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> }
 function IconCheck()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><polyline points="20 6 9 17 4 12"/></svg> }
+function IconUser()     { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> }
 
 // ══════════════════════════════════════════════════════════════════════════
 // SHARED STYLES + UTILS
@@ -138,6 +139,17 @@ function OverviewTab({ orders, products, profile, loading }: {
 
   return (
     <div className="space-y-5">
+      {/* Welcome */}
+      <div>
+        {loading
+          ? <div className="skeleton h-8 w-48 rounded-lg" />
+          : <h2 className="font-display font-extrabold text-2xl text-ink tracking-tight">
+              Welcome back, {profile?.name ?? 'there'}
+            </h2>
+        }
+        <p className="text-sm text-ink-4 mt-1">Here's an overview of your store.</p>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -733,6 +745,89 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// PROFILE DROPDOWN
+// ══════════════════════════════════════════════════════════════════════════
+
+function ProfileDropdown({ profile, resendLoading, resendDone, onResend, onLogout }: {
+  profile: MerchantProfile | null
+  resendLoading: boolean
+  resendDone: boolean
+  onResend: () => void
+  onLogout: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const needsVerification = profile && !profile.email_verified
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(p => !p)}
+        className="relative flex items-center justify-center w-9 h-9 rounded-xl
+          bg-bg border border-border text-ink-3 hover:text-ink hover:border-ink-4 transition-all"
+      >
+        <IconUser />
+        {needsVerification && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-white" />
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-11 w-72 bg-white border border-border rounded-2xl shadow-xl z-50 overflow-hidden">
+          <div className="px-5 py-4 border-b border-border">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-3">Account</p>
+            {profile ? (
+              <div className="space-y-2.5">
+                <Row label="Business"    value={profile.name} />
+                <Row label="Merchant ID" value={profile.id} />
+                <Row label="Email"       value={profile.email} />
+                <Row label="Status"      value={profile.email_verified ? 'Verified ✓' : 'Not verified'} />
+              </div>
+            ) : (
+              <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="skeleton h-4 rounded" />)}</div>
+            )}
+          </div>
+
+          {needsVerification && (
+            <div className="px-5 py-4 border-b border-border bg-amber-50">
+              <p className="text-xs font-semibold text-amber-800 mb-1">Email not verified</p>
+              <p className="text-xs text-amber-700 leading-relaxed mb-3">
+                Check <strong>{profile!.email}</strong> for your 6-digit code.
+              </p>
+              {resendDone
+                ? <span className="text-xs font-semibold text-green-700">Code sent ✓</span>
+                : <button onClick={onResend} disabled={resendLoading}
+                    className="text-xs font-semibold text-amber-800 border border-amber-300 px-3 py-1.5
+                      rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50">
+                    {resendLoading ? 'Sending…' : 'Resend code'}
+                  </button>
+              }
+            </div>
+          )}
+
+          <button
+            onClick={() => { setOpen(false); onLogout() }}
+            className="w-full text-left px-5 py-3.5 text-sm font-semibold text-red-600
+              hover:bg-red-50 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // DASHBOARD VIEW
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -757,11 +852,13 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
   const [loading, setLoading]  = useState(true)
   const [resendLoading, setResendLoading] = useState(false)
   const [resendDone,    setResendDone]    = useState(false)
+  const [loadError,     setLoadError]     = useState('')
 
   const merchantId = typeof window !== 'undefined' ? localStorage.getItem('m_id') ?? '' : ''
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     try {
       const [prof, clientList, orderList] = await Promise.all([
         getMerchantProfile(token),
@@ -783,7 +880,7 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
       setProducts(allProds)
     } catch (err: any) {
       if (err?.status === 401) onLogout()
-      // other errors (network, 5xx) — keep the user logged in, data just won't load
+      else setLoadError(err?.detail ?? 'Could not load dashboard data. Check your connection and refresh.')
     } finally {
       setLoading(false)
     }
@@ -803,22 +900,28 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
       <header className="bg-white border-b border-border sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between gap-4">
           <Logo size="sm" />
-          <div className="flex items-center gap-3">
-            {profile && (
-              <span className="hidden sm:block text-sm font-medium text-ink-3 max-w-[200px] truncate">
-                {profile.name}
-              </span>
-            )}
-            <button onClick={onLogout}
-              className="text-xs font-semibold text-ink-3 hover:text-ink px-3 py-2
-                rounded-xl hover:bg-bg transition-colors">
-              Sign out
-            </button>
-          </div>
+          <ProfileDropdown
+            profile={profile}
+            resendLoading={resendLoading}
+            resendDone={resendDone}
+            onResend={handleResend}
+            onLogout={onLogout}
+          />
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-8">
+        {/* Load error */}
+        {loadError && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-5 py-4 mb-6 flex items-center justify-between gap-4">
+            <p className="text-sm text-red-700">{loadError}</p>
+            <button onClick={loadData} className="text-xs font-semibold text-red-700 border border-red-300
+              px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors shrink-0">
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Banners */}
         {isVerified && (
           <div className="bg-green-50 border border-green-200 rounded-2xl px-5 py-4 mb-6 flex items-center gap-3">
@@ -827,25 +930,6 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
               <p className="text-sm font-semibold text-green-800">Email verified</p>
               <p className="text-xs text-green-700 mt-0.5">Your account is fully active. Welcome to ShopprHQ!</p>
             </div>
-          </div>
-        )}
-        {!loading && profile && !profile.email_verified && !isVerified && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 mb-6
-            flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">Verify your email</p>
-              <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                We sent a 6-digit code to <strong>{profile.email}</strong>.
-              </p>
-            </div>
-            {resendDone
-              ? <span className="text-xs text-green-700 font-semibold shrink-0">Sent ✓</span>
-              : <button onClick={handleResend} disabled={resendLoading}
-                  className="text-xs font-semibold text-amber-800 border border-amber-300 px-4 py-2
-                    rounded-xl hover:bg-amber-100 transition-colors shrink-0 disabled:opacity-50">
-                  {resendLoading ? 'Sending…' : 'Resend code'}
-                </button>
-            }
           </div>
         )}
 
