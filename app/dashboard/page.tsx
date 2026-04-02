@@ -129,10 +129,14 @@ function Modal({ open, onClose, title, children }: {
 // OVERVIEW TAB
 // ══════════════════════════════════════════════════════════════════════════
 
-function OverviewTab({ orders, products, profile, loading }: {
-  orders: Order[]; products: Product[]; profile: MerchantProfile | null; loading: boolean
+function OverviewTab({ orders, products, profile, loading, onOrderClick }: {
+  orders: Order[]; products: Product[]; profile: MerchantProfile | null
+  loading: boolean; onOrderClick: (id: string) => void
 }) {
-  const revenue      = orders.filter(o => ['PAID','FULFILLED'].includes(o.status)).reduce((s, o) => s + o.total_amount, 0)
+  const today        = new Date().toDateString()
+  const todayOrders  = orders.filter(o => o.created_at && new Date(o.created_at).toDateString() === today)
+  const todayRevenue = todayOrders.filter(o => ['PAID','FULFILLED'].includes(o.status))
+                         .reduce((s, o) => s + o.total_amount, 0)
   const pending      = orders.filter(o => o.status === 'AWAITING_PICKUP').length
   const recentOrders = [...orders].sort((a, b) =>
     new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
@@ -148,16 +152,16 @@ function OverviewTab({ orders, products, profile, loading }: {
               Welcome back, {profile?.name ?? 'there'}
             </h2>
         }
-        <p className="text-sm text-ink-4 mt-1">Here's an overview of your store.</p>
+        <p className="text-sm text-ink-4 mt-1">Here's today's snapshot of your store.</p>
       </div>
 
-      {/* Stats */}
+      {/* Stats — today only */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Orders',  value: loading ? null : orders.length.toString() },
-          { label: 'Revenue',       value: loading ? null : fmt(revenue) },
-          { label: 'Pending',       value: loading ? null : pending.toString() },
-          { label: 'Products',      value: loading ? null : products.length.toString() },
+          { label: "Today's Orders",  value: loading ? null : todayOrders.length.toString() },
+          { label: "Today's Revenue", value: loading ? null : fmt(todayRevenue) },
+          { label: 'Pending',         value: loading ? null : pending.toString() },
+          { label: 'Items',           value: loading ? null : products.length.toString() },
         ].map((s) => (
           <div key={s.label} className="bg-white border border-border rounded-2xl p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-2">
@@ -194,17 +198,17 @@ function OverviewTab({ orders, products, profile, loading }: {
         ) : (
           <div className="divide-y divide-border">
             {recentOrders.map(o => (
-              <div key={o.id} className="px-6 py-4 flex items-center gap-4">
+              <div key={o.id} onClick={() => onOrderClick(o.id)}
+                className="px-6 py-4 flex items-center gap-4 hover:bg-bg/50 transition-colors cursor-pointer">
                 <span className="font-mono text-xs font-semibold text-ink bg-bg border border-border
                   px-2.5 py-1 rounded-lg shrink-0">
                   {o.order_code}
                 </span>
-                <span className="text-sm text-ink-3 truncate flex-1">
-                  {o.customer_name || o.user_id}
-                </span>
-                <span className="text-sm font-semibold text-ink shrink-0">
-                  {fmt(o.total_amount)}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-ink-3 truncate">{o.customer_name || o.user_id}</p>
+                  <p className="text-xs text-ink-4 mt-0.5">{timeAgo(o.created_at)}</p>
+                </div>
+                <span className="text-sm font-semibold text-ink shrink-0">{fmt(o.total_amount)}</span>
                 <StatusBadge status={o.status} />
               </div>
             ))}
@@ -219,67 +223,29 @@ function OverviewTab({ orders, products, profile, loading }: {
 // ORDERS TAB
 // ══════════════════════════════════════════════════════════════════════════
 
-function OrdersTab({ orders, loading, token, merchantId, onRefresh }: {
-  orders: Order[]; loading: boolean; token: string; merchantId: string; onRefresh: () => void
+function OrdersTab({ orders, loading, onOpenDetail }: {
+  orders: Order[]; loading: boolean; onOpenDetail: (id: string) => void
 }) {
-  const [filter,      setFilter]      = useState<string>('ALL')
-  const [detail,      setDetail]      = useState<OrderDetail | null>(null)
-  const [detailOpen,  setDetailOpen]  = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [filter, setFilter] = useState<string>('ALL')
 
   const FILTERS = ['ALL','AWAITING_PICKUP','OUT_FOR_DELIVERY','PAID','FULFILLED','CANCELLED']
-
   const visible = filter === 'ALL' ? orders : orders.filter(o => o.status === filter)
   const sorted  = [...visible].sort((a, b) =>
     new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
   )
-
-  async function openDetail(orderId: string) {
-    setDetailLoading(true)
-    setDetailOpen(true)
-    try {
-      const d = await getOrderDetail(token, orderId, merchantId)
-      setDetail(d)
-    } catch { setDetailOpen(false) }
-    finally { setDetailLoading(false) }
-  }
-
-  async function handleConfirm(orderId: string) {
-    setActionLoading(orderId + 'confirm')
-    try {
-      await confirmCashOrder(token, orderId, merchantId)
-      onRefresh()
-      setDetailOpen(false)
-    } catch {}
-    finally { setActionLoading(null) }
-  }
-
-  async function handleDispatch(orderId: string) {
-    setActionLoading(orderId + 'dispatch')
-    try {
-      await dispatchOrder(token, orderId, merchantId)
-      onRefresh()
-      setDetailOpen(false)
-    } catch {}
-    finally { setActionLoading(null) }
-  }
 
   return (
     <>
       {/* Filter pills */}
       <div className="flex items-center gap-2 flex-wrap mb-5">
         {FILTERS.map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
+          <button key={f} onClick={() => setFilter(f)}
             className={cn(
               'text-xs font-semibold px-3.5 py-1.5 rounded-full border transition-all',
               filter === f
                 ? 'bg-ink text-white border-ink'
                 : 'bg-white text-ink-3 border-border hover:border-ink-4 hover:text-ink',
-            )}
-          >
+            )}>
             {f === 'ALL' ? 'All orders' : (STATUS_LABEL[f] ?? f)}
           </button>
         ))}
@@ -294,7 +260,6 @@ function OrdersTab({ orders, loading, token, merchantId, onRefresh }: {
                 <div className="skeleton h-4 flex-1 rounded" />
                 <div className="skeleton h-4 w-20 rounded" />
                 <div className="skeleton h-6 w-24 rounded-full" />
-                <div className="skeleton h-8 w-8 rounded-xl" />
               </div>
             ))}
           </div>
@@ -306,24 +271,18 @@ function OrdersTab({ orders, loading, token, merchantId, onRefresh }: {
         ) : (
           <div className="divide-y divide-border">
             {sorted.map(o => (
-              <div key={o.id} onClick={() => openDetail(o.id)}
+              <div key={o.id} onClick={() => onOpenDetail(o.id)}
                 className="px-6 py-4 flex items-center gap-4 hover:bg-bg/50 transition-colors cursor-pointer">
                 <span className="font-mono text-xs font-semibold text-ink bg-bg border border-border
                   px-2.5 py-1 rounded-lg shrink-0">
                   {o.order_code}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink truncate">
-                    {o.customer_name || o.user_id}
-                  </p>
+                  <p className="text-sm font-medium text-ink truncate">{o.customer_name || o.user_id}</p>
                   <p className="text-xs text-ink-4 mt-0.5">{timeAgo(o.created_at)}</p>
                 </div>
-                <span className="text-sm font-semibold text-ink shrink-0">
-                  {fmt(o.total_amount)}
-                </span>
-                <span className="text-xs text-ink-4 shrink-0 hidden sm:block capitalize">
-                  {o.payment_method}
-                </span>
+                <span className="text-sm font-semibold text-ink shrink-0">{fmt(o.total_amount)}</span>
+                <span className="text-xs text-ink-4 shrink-0 hidden sm:block capitalize">{o.payment_method}</span>
                 <StatusBadge status={o.status} />
                 <span className="shrink-0 p-2 text-ink-4"><IconEye /></span>
               </div>
@@ -331,87 +290,6 @@ function OrdersTab({ orders, loading, token, merchantId, onRefresh }: {
           </div>
         )}
       </div>
-
-      {/* Order detail modal */}
-      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Order detail">
-        {detailLoading || !detail ? (
-          <div className="space-y-3">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton h-5 rounded" />)}
-          </div>
-        ) : (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <span className="font-mono font-bold text-xl text-ink tracking-wider">
-                #{detail.order_code}
-              </span>
-              <StatusBadge status={detail.status} />
-            </div>
-
-            {/* Customer */}
-            <div className="bg-bg rounded-2xl p-4 space-y-2">
-              <Row label="Customer"   value={detail.customer_name || '—'} />
-              <Row label="Phone"      value={detail.user_id} />
-              <Row label="Payment"    value={detail.payment_method} capitalize />
-              <Row label="Store"      value={detail.store_name || detail.client_id} />
-              {detail.delivery_address && <Row label="Delivery address" value={detail.delivery_address} />}
-              {detail.delivery_contact_number && <Row label="Delivery contact" value={detail.delivery_contact_number} />}
-              <Row label="Placed"     value={detail.created_at ? new Date(detail.created_at).toLocaleString('en-NG') : '—'} />
-            </div>
-
-            {/* Items */}
-            {detail.items.length > 0 && (
-              <div className="border border-border rounded-2xl overflow-hidden">
-                <div className="bg-bg px-4 py-2.5 border-b border-border">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-ink-4">Items</p>
-                </div>
-                <div className="divide-y divide-border">
-                  {detail.items.map(item => (
-                    <div key={item.product_id} className="flex items-center justify-between px-4 py-3">
-                      <div>
-                        <p className="text-sm font-medium text-ink">{item.product_name}</p>
-                        <p className="text-xs text-ink-4">× {item.quantity} @ {fmt(item.price)}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-ink">{fmt(item.subtotal)}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between px-4 py-3 bg-bg border-t border-border">
-                  <span className="text-sm font-bold text-ink">Total</span>
-                  <span className="text-sm font-bold text-ink">{fmt(detail.total_amount)}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-3 flex-wrap">
-              {detail.payment_method === 'cash' &&
-                (detail.status === 'AWAITING_PICKUP' || detail.status === 'OUT_FOR_DELIVERY') && (
-                <button
-                  onClick={() => handleConfirm(detail.id)}
-                  disabled={!!actionLoading}
-                  className="flex items-center gap-2 bg-wa text-white text-sm font-semibold
-                    px-4 py-2.5 rounded-xl shadow-wa hover:bg-wa-dark transition-all
-                    disabled:opacity-50"
-                >
-                  <IconCheck />
-                  {actionLoading === detail.id + 'confirm' ? 'Confirming…' : 'Confirm & send receipt'}
-                </button>
-              )}
-              {detail.status === 'AWAITING_PICKUP' && detail.delivery_type === 'delivery' && (
-                <button
-                  onClick={() => handleDispatch(detail.id)}
-                  disabled={!!actionLoading}
-                  className="flex items-center gap-2 bg-ink text-white text-sm font-semibold
-                    px-4 py-2.5 rounded-xl hover:bg-ink-2 transition-all disabled:opacity-50"
-                >
-                  <IconTruck />
-                  {actionLoading === detail.id + 'dispatch' ? 'Dispatching…' : 'Mark out for delivery'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
     </>
   )
 }
@@ -994,7 +872,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
             <div className="mb-5">
               <h3 className="font-display font-bold text-base text-ink tracking-tight">Delivery</h3>
               <p className="text-xs text-ink-4 mt-1">
-                Flat-fee delivery for Port Harcourt
+                A flat fee will be added to the customer's order at checkout
                 {clients.length > 1 ? ` — ${selected?.name}` : ''}.
               </p>
             </div>
@@ -1183,8 +1061,35 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
   const [loading, setLoading]  = useState(true)
   const [resendLoading, setResendLoading] = useState(false)
   const [resendDone,    setResendDone]    = useState(false)
-  const [loadError,   setLoadError]   = useState('')
-  const [merchantId,  setMerchantId]  = useState('')
+  const [loadError,     setLoadError]     = useState('')
+  const [merchantId,    setMerchantId]    = useState('')
+  const [detail,        setDetail]        = useState<OrderDetail | null>(null)
+  const [detailOpen,    setDetailOpen]    = useState(false)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  const openOrderDetail = useCallback(async (orderId: string) => {
+    setDetail(null)
+    setDetailOpen(true)
+    setDetailLoading(true)
+    try {
+      const d = await getOrderDetail(token, orderId, merchantId)
+      setDetail(d)
+    } catch { setDetailOpen(false) }
+    finally { setDetailLoading(false) }
+  }, [token, merchantId])
+
+  async function handleConfirm(orderId: string) {
+    setActionLoading(orderId + 'confirm')
+    try { await confirmCashOrder(token, orderId, merchantId); loadData(); setDetailOpen(false) } catch {}
+    finally { setActionLoading(null) }
+  }
+
+  async function handleDispatch(orderId: string) {
+    setActionLoading(orderId + 'dispatch')
+    try { await dispatchOrder(token, orderId, merchantId); loadData(); setDetailOpen(false) } catch {}
+    finally { setActionLoading(null) }
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -1288,7 +1193,8 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
 
         {/* Tab content */}
         {tab === 'overview' && (
-          <OverviewTab orders={orders} products={products} profile={profile} loading={loading} />
+          <OverviewTab orders={orders} products={products} profile={profile}
+            loading={loading} onOrderClick={openOrderDetail} />
         )}
         {tab === 'inventory' && (
           <InventoryTab
@@ -1297,18 +1203,78 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
           />
         )}
         {tab === 'orders' && (
-          <OrdersTab
-            orders={orders} loading={loading}
-            token={token} merchantId={merchantId} onRefresh={loadData}
-          />
+          <OrdersTab orders={orders} loading={loading} onOpenDetail={openOrderDetail} />
         )}
         {tab === 'settings' && (
-          <SettingsTab
-            profile={profile} clients={clients}
-            token={token} onRefresh={loadData}
-          />
+          <SettingsTab profile={profile} clients={clients} token={token} onRefresh={loadData} />
         )}
       </main>
+
+      {/* Shared order detail modal */}
+      <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Order detail">
+        {detailLoading || !detail ? (
+          <div className="space-y-3">
+            {[1,2,3,4].map(i => <div key={i} className="skeleton h-5 rounded" />)}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono font-bold text-xl text-ink tracking-wider">#{detail.order_code}</span>
+              <StatusBadge status={detail.status} />
+            </div>
+            <div className="bg-bg rounded-2xl p-4 space-y-2">
+              <Row label="Customer" value={detail.customer_name || '—'} />
+              <Row label="Phone"    value={detail.user_id} />
+              <Row label="Payment"  value={detail.payment_method} capitalize />
+              <Row label="Store"    value={detail.store_name || detail.client_id} />
+              {detail.delivery_address && <Row label="Delivery address" value={detail.delivery_address} />}
+              {detail.delivery_contact_number && <Row label="Delivery contact" value={detail.delivery_contact_number} />}
+              <Row label="Placed" value={detail.created_at ? new Date(detail.created_at).toLocaleString('en-NG') : '—'} />
+            </div>
+            {detail.items.length > 0 && (
+              <div className="border border-border rounded-2xl overflow-hidden">
+                <div className="bg-bg px-4 py-2.5 border-b border-border">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-ink-4">Items</p>
+                </div>
+                <div className="divide-y divide-border">
+                  {detail.items.map(item => (
+                    <div key={item.product_id} className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-ink">{item.product_name}</p>
+                        <p className="text-xs text-ink-4">× {item.quantity} @ {fmt(item.price)}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-ink">{fmt(item.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between px-4 py-3 bg-bg border-t border-border">
+                  <span className="text-sm font-bold text-ink">Total</span>
+                  <span className="text-sm font-bold text-ink">{fmt(detail.total_amount)}</span>
+                </div>
+              </div>
+            )}
+            <div className="flex gap-3 flex-wrap">
+              {detail.payment_method === 'cash' &&
+                (detail.status === 'AWAITING_PICKUP' || detail.status === 'OUT_FOR_DELIVERY') && (
+                <button onClick={() => handleConfirm(detail.id)} disabled={!!actionLoading}
+                  className="flex items-center gap-2 bg-wa text-white text-sm font-semibold
+                    px-4 py-2.5 rounded-xl shadow-wa hover:bg-wa-dark transition-all disabled:opacity-50">
+                  <IconCheck />
+                  {actionLoading === detail.id + 'confirm' ? 'Confirming…' : 'Confirm & send receipt'}
+                </button>
+              )}
+              {detail.status === 'AWAITING_PICKUP' && detail.delivery_type === 'delivery' && (
+                <button onClick={() => handleDispatch(detail.id)} disabled={!!actionLoading}
+                  className="flex items-center gap-2 bg-ink text-white text-sm font-semibold
+                    px-4 py-2.5 rounded-xl hover:bg-ink-2 transition-all disabled:opacity-50">
+                  <IconTruck />
+                  {actionLoading === detail.id + 'dispatch' ? 'Dispatching…' : 'Mark out for delivery'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
