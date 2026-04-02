@@ -7,6 +7,7 @@ import Logo from '@/components/Logo'
 import {
   merchantLogin, getMerchantProfile, resendVerification,
   getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
+  updatePersona, updateDelivery,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
   type MerchantProfile, type Client, type Product, type Order, type OrderDetail,
 } from '@/lib/api'
@@ -780,58 +781,131 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   token: string
   onRefresh: () => void
 }) {
-  const [addOpen,  setAddOpen]  = useState(false)
-  const [saving,   setSaving]   = useState(false)
-  const [err,      setErr]      = useState('')
+  // ── Store creation ───────────────────────────────────────────────────────
+  const [addOpen,   setAddOpen]   = useState(false)
+  const [storeSaving, setStoreSaving] = useState(false)
+  const [storeErr,  setStoreErr]  = useState('')
   const [storeForm, setStoreForm] = useState({ name: '', password: '', wa: '' })
 
-  function setF(k: string) {
+  function setSF(k: string) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
-      setStoreForm(p => ({ ...p, [k]: e.target.value })); setErr('')
+      setStoreForm(p => ({ ...p, [k]: e.target.value })); setStoreErr('')
     }
   }
 
   async function handleAddStore(e: React.FormEvent) {
     e.preventDefault()
-    if (!storeForm.name.trim()) return setErr('Store name is required.')
-    if (!storeForm.password)    return setErr('Password is required.')
+    if (!storeForm.name.trim()) return setStoreErr('Store name is required.')
+    if (!storeForm.password)    return setStoreErr('Password is required.')
     const waClean = storeForm.wa.replace(/^\+/, '').replace(/\s+/g, '') || undefined
-    setSaving(true)
+    setStoreSaving(true)
     try {
-      await createClient(token, {
-        name: storeForm.name.trim(),
-        password: storeForm.password,
-        whatsapp_number: waClean ?? null,
-      })
+      await createClient(token, { name: storeForm.name.trim(), password: storeForm.password, whatsapp_number: waClean ?? null })
       setAddOpen(false)
       setStoreForm({ name: '', password: '', wa: '' })
       onRefresh()
-    } catch (e: any) {
-      setErr(e.detail ?? 'Could not create store.')
-    } finally { setSaving(false) }
+    } catch (err: any) { setStoreErr(err.detail ?? 'Could not create store.') }
+    finally { setStoreSaving(false) }
   }
+
+  // ── Store selector for persona/delivery ──────────────────────────────────
+  const [selectedId, setSelectedId] = useState(clients[0]?.id ?? '')
+  const selected = clients.find(c => c.id === selectedId) ?? clients[0]
+
+  // ── Persona ──────────────────────────────────────────────────────────────
+  const [personaForm, setPersonaForm] = useState({
+    assistant_name:        selected?.assistant_name        ?? '',
+    assistant_personality: selected?.assistant_personality ?? 'friendly',
+  })
+  const [personaSaving, setPersonaSaving] = useState(false)
+  const [personaMsg,    setPersonaMsg]    = useState('')
+
+  // ── Delivery ─────────────────────────────────────────────────────────────
+  const [deliveryForm, setDeliveryForm] = useState({
+    delivery_enabled: selected?.delivery_enabled ?? false,
+    delivery_fee:     String(selected?.delivery_fee ?? ''),
+  })
+  const [deliverySaving, setDeliverySaving] = useState(false)
+  const [deliveryMsg,    setDeliveryMsg]    = useState('')
+  const [deliveryErr,    setDeliveryErr]    = useState('')
+
+  // Reset forms when selected store changes
+  useEffect(() => {
+    const c = clients.find(x => x.id === selectedId) ?? clients[0]
+    if (!c) return
+    setPersonaForm({
+      assistant_name:        c.assistant_name        ?? '',
+      assistant_personality: c.assistant_personality ?? 'friendly',
+    })
+    setDeliveryForm({
+      delivery_enabled: c.delivery_enabled ?? false,
+      delivery_fee:     String(c.delivery_fee ?? ''),
+    })
+    setPersonaMsg('')
+    setDeliveryMsg('')
+    setDeliveryErr('')
+  }, [selectedId, clients])
+
+  async function handleSavePersona(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) return
+    setPersonaSaving(true); setPersonaMsg('')
+    try {
+      await updatePersona(token, selected.id, {
+        assistant_name:        personaForm.assistant_name,
+        assistant_personality: personaForm.assistant_personality,
+      })
+      setPersonaMsg('Saved ✓')
+      onRefresh()
+    } catch (err: any) { setPersonaMsg(err.detail ?? 'Could not save.') }
+    finally { setPersonaSaving(false) }
+  }
+
+  async function handleSaveDelivery(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) return
+    if (deliveryForm.delivery_enabled && !deliveryForm.delivery_fee) {
+      return setDeliveryErr('Enter a delivery fee.')
+    }
+    setDeliverySaving(true); setDeliveryErr(''); setDeliveryMsg('')
+    try {
+      await updateDelivery(token, selected.id, {
+        delivery_enabled: deliveryForm.delivery_enabled,
+        delivery_fee:     deliveryForm.delivery_enabled ? +deliveryForm.delivery_fee : 0,
+      })
+      setDeliveryMsg('Saved ✓')
+      onRefresh()
+    } catch (err: any) { setDeliveryErr(err.detail ?? 'Could not save.') }
+    finally { setDeliverySaving(false) }
+  }
+
+  const PERSONALITIES = [
+    { value: 'friendly',     label: 'Friendly' },
+    { value: 'professional', label: 'Professional' },
+    { value: 'casual',       label: 'Casual' },
+    { value: 'formal',       label: 'Formal' },
+  ]
 
   return (
     <div className="space-y-6">
-      {/* Account */}
+
+      {/* ── Account ── */}
       <div className="bg-white border border-border rounded-3xl p-7">
         <h3 className="font-display font-bold text-base text-ink mb-4 tracking-tight">Account</h3>
-        <div className="space-y-0">
-          {profile ? (
-            <>
-              <Row label="Merchant ID"   value={profile.id} />
-              <Row label="Business name" value={profile.name} />
-              <Row label="Email"         value={profile.email} />
-              <Row label="Email status"  value={profile.email_verified ? 'Verified ✓' : 'Not verified'} />
-              {profile.whatsapp_number && <Row label="WhatsApp" value={profile.whatsapp_number} />}
-            </>
-          ) : (
-            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
-          )}
-        </div>
+        {profile ? (
+          <div className="space-y-0">
+            <Row label="Merchant ID"   value={profile.id} />
+            <Row label="Business name" value={profile.name} />
+            <Row label="Email"         value={profile.email} />
+            <Row label="Email status"  value={profile.email_verified ? 'Verified ✓' : 'Not verified'} />
+            {profile.whatsapp_number && <Row label="WhatsApp" value={profile.whatsapp_number} />}
+          </div>
+        ) : (
+          <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
+        )}
       </div>
 
-      {/* Stores */}
+      {/* ── Stores ── */}
       <div className="bg-white border border-border rounded-3xl p-7">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-bold text-base text-ink tracking-tight">
@@ -843,52 +917,157 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
             <IconPlus /> New store
           </button>
         </div>
-
         {clients.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-sm text-ink-4">No stores yet. Create one to start selling.</p>
-          </div>
+          <p className="text-sm text-ink-4 py-6 text-center">No stores yet. Create one to start selling.</p>
         ) : (
           <div className="divide-y divide-border">
             {clients.map(c => (
               <div key={c.id} className="py-3.5 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-ink">{c.name || '—'}</p>
-                  {c.whatsapp_number && (
-                    <p className="text-xs text-ink-4 mt-0.5">{c.whatsapp_number}</p>
-                  )}
+                  {c.whatsapp_number && <p className="text-xs text-ink-4 mt-0.5">{c.whatsapp_number}</p>}
                 </div>
                 <span className="font-mono text-xs font-semibold text-ink-3 bg-bg border border-border
-                  px-2.5 py-1 rounded-lg shrink-0">
-                  {c.id}
-                </span>
+                  px-2.5 py-1 rounded-lg shrink-0">{c.id}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
+      {/* ── Per-store config ── */}
+      {clients.length > 0 && (
+        <>
+          {/* Store selector */}
+          {clients.length > 1 && (
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-semibold text-ink-3 shrink-0">Configure store:</p>
+              <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className={cn(INPUT, 'flex-1')}>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* ── AI Persona ── */}
+          <div className="bg-white border border-border rounded-3xl p-7">
+            <div className="mb-5">
+              <h3 className="font-display font-bold text-base text-ink tracking-tight">AI Persona</h3>
+              <p className="text-xs text-ink-4 mt-1">
+                This is the identity your WhatsApp AI assistant uses when talking to customers
+                {clients.length > 1 ? ` for ${selected?.name}` : ''}.
+              </p>
+            </div>
+            <form onSubmit={handleSavePersona} className="space-y-4">
+              <FormField label="Assistant name" hint="The name customers see in the chat, e.g. Adaeze, Temi, Shoppr.">
+                <input type="text" placeholder="e.g. Adaeze"
+                  value={personaForm.assistant_name}
+                  onChange={e => { setPersonaForm(p => ({ ...p, assistant_name: e.target.value })); setPersonaMsg('') }}
+                  className={INPUT} />
+              </FormField>
+              <FormField label="Personality style">
+                <select
+                  value={personaForm.assistant_personality}
+                  onChange={e => { setPersonaForm(p => ({ ...p, assistant_personality: e.target.value })); setPersonaMsg('') }}
+                  className={INPUT}
+                >
+                  {PERSONALITIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </FormField>
+              <div className="flex items-center justify-between gap-4">
+                <button type="submit" disabled={personaSaving}
+                  className="bg-ink text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                    hover:bg-ink-2 transition-all disabled:opacity-50">
+                  {personaSaving ? 'Saving…' : 'Save persona'}
+                </button>
+                {personaMsg && (
+                  <span className={cn('text-xs font-semibold',
+                    personaMsg.includes('✓') ? 'text-green-700' : 'text-red-600')}>
+                    {personaMsg}
+                  </span>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* ── Delivery ── */}
+          <div className="bg-white border border-border rounded-3xl p-7">
+            <div className="mb-5">
+              <h3 className="font-display font-bold text-base text-ink tracking-tight">Delivery</h3>
+              <p className="text-xs text-ink-4 mt-1">
+                Flat-fee delivery for Port Harcourt
+                {clients.length > 1 ? ` — ${selected?.name}` : ''}.
+              </p>
+            </div>
+            <form onSubmit={handleSaveDelivery} className="space-y-4">
+              {/* Enable/disable toggle */}
+              <div className="flex gap-3">
+                {[
+                  { val: true,  label: 'Delivery enabled' },
+                  { val: false, label: 'Pickup only' },
+                ].map(opt => (
+                  <label key={String(opt.val)}
+                    className={cn(
+                      'flex-1 flex items-center gap-2.5 px-4 py-3 rounded-2xl border-[1.5px] cursor-pointer transition-all',
+                      deliveryForm.delivery_enabled === opt.val
+                        ? 'border-ink bg-ink text-white'
+                        : 'border-border bg-white text-ink-3 hover:border-ink-4',
+                    )}>
+                    <input type="radio" className="sr-only"
+                      checked={deliveryForm.delivery_enabled === opt.val}
+                      onChange={() => { setDeliveryForm(p => ({ ...p, delivery_enabled: opt.val })); setDeliveryErr(''); setDeliveryMsg('') }} />
+                    <span className="text-sm font-semibold">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* Fee input */}
+              {deliveryForm.delivery_enabled && (
+                <FormField label="Delivery fee (₦)" hint="Flat fee charged per order.">
+                  <input type="number" min="0" placeholder="e.g. 1500"
+                    value={deliveryForm.delivery_fee}
+                    onChange={e => { setDeliveryForm(p => ({ ...p, delivery_fee: e.target.value })); setDeliveryErr('') }}
+                    className={INPUT} />
+                </FormField>
+              )}
+
+              {deliveryErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{deliveryErr}</p>}
+
+              <div className="flex items-center justify-between gap-4">
+                <button type="submit" disabled={deliverySaving}
+                  className="bg-ink text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                    hover:bg-ink-2 transition-all disabled:opacity-50">
+                  {deliverySaving ? 'Saving…' : 'Save delivery'}
+                </button>
+                {deliveryMsg && (
+                  <span className="text-xs font-semibold text-green-700">{deliveryMsg}</span>
+                )}
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
       {/* Add store modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Create store">
         <form onSubmit={handleAddStore} className="space-y-4">
           <FormField label="Store name">
             <input type="text" placeholder="e.g. Lagos Branch" value={storeForm.name}
-              onChange={setF('name')} className={INPUT} />
+              onChange={setSF('name')} className={INPUT} />
           </FormField>
           <FormField label="Store password" hint="Store managers use this to sign in.">
             <input type="password" placeholder="Create a password" value={storeForm.password}
-              onChange={setF('password')} autoComplete="new-password" className={INPUT} />
+              onChange={setSF('password')} autoComplete="new-password" className={INPUT} />
           </FormField>
           <FormField label="Operator WhatsApp number (optional)"
             hint="International format, no + sign. e.g. 2348012345678">
             <input type="tel" placeholder="2348012345678" inputMode="numeric"
-              value={storeForm.wa} onChange={setF('wa')} className={INPUT} />
+              value={storeForm.wa} onChange={setSF('wa')} className={INPUT} />
           </FormField>
-          {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{err}</p>}
-          <button type="submit" disabled={saving}
+          {storeErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{storeErr}</p>}
+          <button type="submit" disabled={storeSaving}
             className="w-full bg-wa text-white font-semibold text-sm py-3 rounded-xl shadow-wa
               hover:bg-wa-dark transition-all disabled:opacity-50">
-            {saving ? 'Creating…' : 'Create store'}
+            {storeSaving ? 'Creating…' : 'Create store'}
           </button>
         </form>
       </Modal>

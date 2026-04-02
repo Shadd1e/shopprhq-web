@@ -59,6 +59,10 @@ export interface Client {
   name: string
   merchant_id: string
   whatsapp_number?: string
+  assistant_name?: string
+  assistant_personality?: string
+  delivery_enabled?: boolean
+  delivery_fee?: number
 }
 
 export interface InventoryInfo {
@@ -169,6 +173,30 @@ export async function createClient(
 ) {
   return req<Client>('/api/v1/clients/', {
     method: 'POST',
+    headers: bearer(token),
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updatePersona(
+  token: string,
+  clientId: string,
+  data: { assistant_name: string; assistant_personality: string },
+) {
+  return req<Client>(`/api/v1/clients/${clientId}/persona`, {
+    method: 'PATCH',
+    headers: bearer(token),
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateDelivery(
+  token: string,
+  clientId: string,
+  data: { delivery_enabled: boolean; delivery_fee: number },
+) {
+  return req<Client>(`/api/v1/clients/${clientId}/delivery`, {
+    method: 'PATCH',
     headers: bearer(token),
     body: JSON.stringify(data),
   })
