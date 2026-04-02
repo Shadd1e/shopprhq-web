@@ -163,6 +163,17 @@ export async function getClients(token: string) {
   })
 }
 
+export async function createClient(
+  token: string,
+  data: { name: string; password: string; whatsapp_number?: string | null },
+) {
+  return req<Client>('/api/v1/clients/', {
+    method: 'POST',
+    headers: bearer(token),
+    body: JSON.stringify(data),
+  })
+}
+
 // ── Products (inventory endpoint — requires X-headers) ────────────────────
 
 export async function getInventory(token: string, merchantId: string, clientId: string) {

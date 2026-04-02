@@ -6,7 +6,7 @@ import Link from 'next/link'
 import Logo from '@/components/Logo'
 import {
   merchantLogin, getMerchantProfile, resendVerification,
-  getClients, getInventory, createProduct, updateProduct,
+  getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
   type MerchantProfile, type Client, type Product, type Order, type OrderDetail,
 } from '@/lib/api'
@@ -305,8 +305,8 @@ function OrdersTab({ orders, loading, token, merchantId, onRefresh }: {
         ) : (
           <div className="divide-y divide-border">
             {sorted.map(o => (
-              <div key={o.id} className="px-6 py-4 flex items-center gap-4 hover:bg-bg/50
-                transition-colors group">
+              <div key={o.id} onClick={() => openDetail(o.id)}
+                className="px-6 py-4 flex items-center gap-4 hover:bg-bg/50 transition-colors cursor-pointer">
                 <span className="font-mono text-xs font-semibold text-ink bg-bg border border-border
                   px-2.5 py-1 rounded-lg shrink-0">
                   {o.order_code}
@@ -324,13 +324,7 @@ function OrdersTab({ orders, loading, token, merchantId, onRefresh }: {
                   {o.payment_method}
                 </span>
                 <StatusBadge status={o.status} />
-                <button
-                  onClick={() => openDetail(o.id)}
-                  className="shrink-0 p-2 rounded-xl text-ink-4 hover:text-ink hover:bg-border/60
-                    transition-all opacity-0 group-hover:opacity-100"
-                >
-                  <IconEye />
-                </button>
+                <span className="shrink-0 p-2 text-ink-4"><IconEye /></span>
               </div>
             ))}
           </div>
@@ -433,32 +427,43 @@ function Row({ label, value, capitalize }: { label: string; value: string; capit
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// PRODUCTS TAB
+// INVENTORY TAB
 // ══════════════════════════════════════════════════════════════════════════
 
-function ProductsTab({ products, clients, loading, token, merchantId, onRefresh }: {
+function InventoryTab({ products, clients, loading, token, merchantId, onRefresh }: {
   products: Product[]; clients: Client[]; loading: boolean
   token: string; merchantId: string; onRefresh: () => void
 }) {
-  const [addOpen,   setAddOpen]   = useState(false)
-  const [editProd,  setEditProd]  = useState<Product | null>(null)
-  const [saving,    setSaving]    = useState(false)
-  const [addErr,    setAddErr]    = useState('')
+  const [addOpen,  setAddOpen]  = useState(false)
+  const [editProd, setEditProd] = useState<Product | null>(null)
+  const [saving,   setSaving]   = useState(false)
+  const [addErr,   setAddErr]   = useState('')
+  const [editErr,  setEditErr]  = useState('')
 
   const [addForm, setAddForm] = useState({
     name: '', price: '', description: '', category: '', initial_stock: '0', client_id: '',
   })
-  const [editForm, setEditForm] = useState({ name: '', price: '', description: '', category: '' })
+  const [editForm, setEditForm] = useState({
+    name: '', price: '', description: '', category: '', stock: '',
+  })
 
-  function setA(k: string) { return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => { setAddForm(p => ({ ...p, [k]: e.target.value })); setAddErr('') } }
-  function setE(k: string) { return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setEditForm(p => ({ ...p, [k]: e.target.value })) }
+  function setA(k: string) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      setAddForm(p => ({ ...p, [k]: e.target.value })); setAddErr('')
+    }
+  }
+  function setE(k: string) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      setEditForm(p => ({ ...p, [k]: e.target.value })); setEditErr('')
+    }
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     if (!addForm.name.trim()) return setAddErr('Product name is required.')
     if (!addForm.price || isNaN(+addForm.price) || +addForm.price <= 0) return setAddErr('Enter a valid price.')
     const clientId = addForm.client_id || clients[0]?.id
-    if (!clientId) return setAddErr('No store found. Create a store first.')
+    if (!clientId) return setAddErr('No store found. Create a store first in Settings.')
     setSaving(true)
     try {
       await createProduct(token, merchantId, clientId, {
@@ -472,30 +477,47 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
       setAddForm({ name: '', price: '', description: '', category: '', initial_stock: '0', client_id: '' })
       onRefresh()
     } catch (err: any) {
-      setAddErr(err.detail ?? 'Could not create product.')
+      setAddErr(err.detail ?? 'Could not create item.')
     } finally { setSaving(false) }
   }
 
   function openEdit(p: Product) {
     setEditProd(p)
-    setEditForm({ name: p.name, price: String(p.price), description: p.description ?? '', category: p.category ?? '' })
+    setEditErr('')
+    setEditForm({
+      name: p.name,
+      price: String(p.price),
+      description: p.description ?? '',
+      category: p.category ?? '',
+      stock: String(p.inventory?.quantity ?? 0),
+    })
   }
 
   async function handleEdit(e: React.FormEvent) {
     e.preventDefault()
     if (!editProd) return
     setSaving(true)
+    setEditErr('')
+    const clientId = editProd.client_id ?? editProd._client?.id ?? ''
     try {
-      await updateProduct(token, merchantId, editProd.client_id ?? editProd._client?.id ?? '', editProd.id, {
-        name: editForm.name || undefined,
-        price: editForm.price ? +editForm.price : undefined,
-        description: editForm.description || undefined,
-        category: editForm.category || undefined,
-      })
+      const origStock = editProd.inventory?.quantity ?? 0
+      const newStock  = +editForm.stock
+      await Promise.all([
+        updateProduct(token, merchantId, clientId, editProd.id, {
+          name:        editForm.name        || undefined,
+          price:       editForm.price       ? +editForm.price : undefined,
+          description: editForm.description || undefined,
+          category:    editForm.category    || undefined,
+        }),
+        ...(newStock !== origStock
+          ? [updateStock(token, merchantId, clientId, editProd.id, newStock)]
+          : []),
+      ])
       setEditProd(null)
       onRefresh()
-    } catch {}
-    finally { setSaving(false) }
+    } catch (err: any) {
+      setEditErr(err.detail ?? 'Could not save changes.')
+    } finally { setSaving(false) }
   }
 
   return (
@@ -503,7 +525,7 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
       {/* Header row */}
       <div className="flex items-center justify-between mb-5">
         <p className="text-sm text-ink-4">
-          {loading ? '—' : `${products.length} product${products.length !== 1 ? 's' : ''}`}
+          {loading ? '—' : `${products.length} item${products.length !== 1 ? 's' : ''}`}
         </p>
         <button
           onClick={() => setAddOpen(true)}
@@ -511,7 +533,7 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
             px-4 py-2.5 rounded-xl hover:bg-ink-2 transition-all hover:-translate-y-px"
         >
           <IconPlus />
-          Add product
+          Add item
         </button>
       </div>
 
@@ -529,19 +551,18 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
           </div>
         ) : products.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-sm font-semibold text-ink mb-1">No products yet</p>
-            <p className="text-xs text-ink-4 mb-4">Add your first product to start taking orders.</p>
+            <p className="text-sm font-semibold text-ink mb-1">No items yet</p>
+            <p className="text-xs text-ink-4 mb-4">Add your first item to start taking orders.</p>
             <button
               onClick={() => setAddOpen(true)}
               className="inline-flex items-center gap-2 bg-wa text-white text-sm font-semibold
                 px-5 py-2.5 rounded-xl shadow-wa hover:bg-wa-dark transition-all"
             >
-              <IconPlus /> Add product
+              <IconPlus /> Add item
             </button>
           </div>
         ) : (
           <>
-            {/* Table header */}
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-4 px-6 py-3
               border-b border-border text-[11px] font-semibold uppercase tracking-wider text-ink-4">
               <span>Name</span>
@@ -552,7 +573,7 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
             </div>
             <div className="divide-y divide-border">
               {products.map(p => {
-                const qty    = p.inventory?.quantity ?? 0
+                const qty   = p.inventory?.quantity ?? 0
                 const thresh = p.inventory?.low_stock_threshold
                 const isLow  = thresh != null && qty > 0 && qty <= thresh
                 const isOut  = qty === 0
@@ -561,29 +582,22 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
                     items-center px-6 py-4 hover:bg-bg/50 transition-colors group">
                     <div>
                       <p className="text-sm font-medium text-ink truncate">{p.name}</p>
-                      {p.description && (
-                        <p className="text-xs text-ink-4 truncate mt-0.5">{p.description}</p>
-                      )}
+                      {p.category && <p className="text-xs text-ink-4 truncate mt-0.5">{p.category}</p>}
                     </div>
-                    <span className="text-sm font-semibold text-ink text-right">
-                      {fmt(p.price)}
-                    </span>
+                    <span className="text-sm font-semibold text-ink text-right">{fmt(p.price)}</span>
                     <span className={cn(
-                      'text-xs font-semibold border px-2.5 py-0.5 rounded-full text-right whitespace-nowrap',
-                      isOut  ? 'bg-red-50 text-red-600 border-red-200' :
-                      isLow  ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                               'bg-green-50 text-green-700 border-green-200',
+                      'text-xs font-semibold border px-2.5 py-0.5 rounded-full whitespace-nowrap',
+                      isOut ? 'bg-red-50 text-red-600 border-red-200' :
+                      isLow ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                              'bg-green-50 text-green-700 border-green-200',
                     )}>
                       {isOut ? 'Out of stock' : `${qty} in stock`}
                     </span>
                     <span className="text-xs text-ink-4 hidden sm:block">
                       {p._client?.name || p.client_id}
                     </span>
-                    <button
-                      onClick={() => openEdit(p)}
-                      className="p-2 rounded-xl text-ink-4 hover:text-ink hover:bg-border/60
-                        transition-all opacity-0 group-hover:opacity-100"
-                    >
+                    <button onClick={() => openEdit(p)}
+                      className="p-2 rounded-xl text-ink-4 hover:text-ink hover:bg-border/60 transition-all">
                       <IconEdit />
                     </button>
                   </div>
@@ -594,10 +608,10 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
         )}
       </div>
 
-      {/* Add product modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add product">
+      {/* Add item modal */}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add inventory item">
         <form onSubmit={handleAdd} className="space-y-4">
-          <FormField label="Product name">
+          <FormField label="Item name">
             <input type="text" placeholder="e.g. Jollof Rice (large)" value={addForm.name} onChange={setA('name')} className={INPUT} />
           </FormField>
           <div className="grid grid-cols-2 gap-3">
@@ -612,9 +626,8 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
             <input type="text" placeholder="e.g. Food, Electronics" value={addForm.category} onChange={setA('category')} className={INPUT} />
           </FormField>
           <FormField label="Description (optional)">
-            <textarea placeholder="Short product description" value={addForm.description}
-              onChange={setA('description') as any}
-              rows={2} className={cn(INPUT, 'resize-none')} />
+            <textarea placeholder="Short description" value={addForm.description}
+              onChange={setA('description') as any} rows={2} className={cn(INPUT, 'resize-none')} />
           </FormField>
           {clients.length > 1 && (
             <FormField label="Store">
@@ -627,27 +640,39 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
           <button type="submit" disabled={saving}
             className="w-full bg-wa text-white font-semibold text-sm py-3 rounded-xl shadow-wa
               hover:bg-wa-dark transition-all disabled:opacity-50">
-            {saving ? 'Saving…' : 'Add product'}
+            {saving ? 'Saving…' : 'Add item'}
           </button>
         </form>
       </Modal>
 
-      {/* Edit product modal */}
-      <Modal open={!!editProd} onClose={() => setEditProd(null)} title="Edit product">
+      {/* Edit item modal */}
+      <Modal open={!!editProd} onClose={() => setEditProd(null)} title="Edit item">
         <form onSubmit={handleEdit} className="space-y-4">
-          <FormField label="Product name">
-            <input type="text" value={editForm.name} onChange={setE('name')} className={INPUT} />
-          </FormField>
-          <FormField label="Price (₦)">
-            <input type="number" min="1" step="any" value={editForm.price} onChange={setE('price')} className={INPUT} />
-          </FormField>
-          <FormField label="Category (optional)">
-            <input type="text" value={editForm.category} onChange={setE('category')} className={INPUT} />
-          </FormField>
-          <FormField label="Description (optional)">
-            <textarea value={editForm.description} onChange={setE('description') as any}
-              rows={2} className={cn(INPUT, 'resize-none')} />
-          </FormField>
+          <div className="bg-bg rounded-2xl px-4 py-3 mb-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-3">Stock</p>
+            <FormField label="Quantity in stock">
+              <input type="number" min="0" value={editForm.stock} onChange={setE('stock')} className={INPUT} />
+            </FormField>
+          </div>
+          <div className="bg-bg rounded-2xl px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-3">Product details</p>
+            <div className="space-y-3">
+              <FormField label="Name">
+                <input type="text" value={editForm.name} onChange={setE('name')} className={INPUT} />
+              </FormField>
+              <FormField label="Price (₦)">
+                <input type="number" min="1" step="any" value={editForm.price} onChange={setE('price')} className={INPUT} />
+              </FormField>
+              <FormField label="Category (optional)">
+                <input type="text" value={editForm.category} onChange={setE('category')} className={INPUT} />
+              </FormField>
+              <FormField label="Description (optional)">
+                <textarea value={editForm.description} onChange={setE('description') as any}
+                  rows={2} className={cn(INPUT, 'resize-none')} />
+              </FormField>
+            </div>
+          </div>
+          {editErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{editErr}</p>}
           <button type="submit" disabled={saving}
             className="w-full bg-ink text-white font-semibold text-sm py-3 rounded-xl
               hover:bg-ink-2 transition-all disabled:opacity-50">
@@ -659,13 +684,14 @@ function ProductsTab({ products, clients, loading, token, merchantId, onRefresh 
   )
 }
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-3 mb-1.5">
         {label}
       </label>
       {children}
+      {hint && <p className="mt-1.5 text-xs text-ink-4 leading-relaxed">{hint}</p>}
     </div>
   )
 }
@@ -740,6 +766,132 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SETTINGS TAB
+// ══════════════════════════════════════════════════════════════════════════
+
+function SettingsTab({ profile, clients, token, onRefresh }: {
+  profile: MerchantProfile | null
+  clients: Client[]
+  token: string
+  onRefresh: () => void
+}) {
+  const [addOpen,  setAddOpen]  = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [err,      setErr]      = useState('')
+  const [storeForm, setStoreForm] = useState({ name: '', password: '', wa: '' })
+
+  function setF(k: string) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setStoreForm(p => ({ ...p, [k]: e.target.value })); setErr('')
+    }
+  }
+
+  async function handleAddStore(e: React.FormEvent) {
+    e.preventDefault()
+    if (!storeForm.name.trim()) return setErr('Store name is required.')
+    if (!storeForm.password)    return setErr('Password is required.')
+    const waClean = storeForm.wa.replace(/^\+/, '').replace(/\s+/g, '') || undefined
+    setSaving(true)
+    try {
+      await createClient(token, {
+        name: storeForm.name.trim(),
+        password: storeForm.password,
+        whatsapp_number: waClean ?? null,
+      })
+      setAddOpen(false)
+      setStoreForm({ name: '', password: '', wa: '' })
+      onRefresh()
+    } catch (e: any) {
+      setErr(e.detail ?? 'Could not create store.')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Account */}
+      <div className="bg-white border border-border rounded-3xl p-7">
+        <h3 className="font-display font-bold text-base text-ink mb-4 tracking-tight">Account</h3>
+        <div className="space-y-0">
+          {profile ? (
+            <>
+              <Row label="Merchant ID"   value={profile.id} />
+              <Row label="Business name" value={profile.name} />
+              <Row label="Email"         value={profile.email} />
+              <Row label="Email status"  value={profile.email_verified ? 'Verified ✓' : 'Not verified'} />
+              {profile.whatsapp_number && <Row label="WhatsApp" value={profile.whatsapp_number} />}
+            </>
+          ) : (
+            <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Stores */}
+      <div className="bg-white border border-border rounded-3xl p-7">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-bold text-base text-ink tracking-tight">
+            Stores ({clients.length})
+          </h3>
+          <button onClick={() => setAddOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold bg-ink text-white
+              px-3.5 py-2 rounded-xl hover:bg-ink-2 transition-all">
+            <IconPlus /> New store
+          </button>
+        </div>
+
+        {clients.length === 0 ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-ink-4">No stores yet. Create one to start selling.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {clients.map(c => (
+              <div key={c.id} className="py-3.5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-ink">{c.name || '—'}</p>
+                  {c.whatsapp_number && (
+                    <p className="text-xs text-ink-4 mt-0.5">{c.whatsapp_number}</p>
+                  )}
+                </div>
+                <span className="font-mono text-xs font-semibold text-ink-3 bg-bg border border-border
+                  px-2.5 py-1 rounded-lg shrink-0">
+                  {c.id}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add store modal */}
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Create store">
+        <form onSubmit={handleAddStore} className="space-y-4">
+          <FormField label="Store name">
+            <input type="text" placeholder="e.g. Lagos Branch" value={storeForm.name}
+              onChange={setF('name')} className={INPUT} />
+          </FormField>
+          <FormField label="Store password" hint="Store managers use this to sign in.">
+            <input type="password" placeholder="Create a password" value={storeForm.password}
+              onChange={setF('password')} autoComplete="new-password" className={INPUT} />
+          </FormField>
+          <FormField label="Operator WhatsApp number (optional)"
+            hint="International format, no + sign. e.g. 2348012345678">
+            <input type="tel" placeholder="2348012345678" inputMode="numeric"
+              value={storeForm.wa} onChange={setF('wa')} className={INPUT} />
+          </FormField>
+          {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{err}</p>}
+          <button type="submit" disabled={saving}
+            className="w-full bg-wa text-white font-semibold text-sm py-3 rounded-xl shadow-wa
+              hover:bg-wa-dark transition-all disabled:opacity-50">
+            {saving ? 'Creating…' : 'Create store'}
+          </button>
+        </form>
+      </Modal>
     </div>
   )
 }
@@ -831,13 +983,13 @@ function ProfileDropdown({ profile, resendLoading, resendDone, onResend, onLogou
 // DASHBOARD VIEW
 // ══════════════════════════════════════════════════════════════════════════
 
-type Tab = 'overview' | 'products' | 'orders' | 'settings'
+type Tab = 'overview' | 'inventory' | 'orders' | 'settings'
 
 const TABS: { id: Tab; label: string; Icon: () => JSX.Element }[] = [
-  { id: 'overview',  label: 'Overview',  Icon: IconGrid     },
-  { id: 'products',  label: 'Products',  Icon: IconBox      },
-  { id: 'orders',    label: 'Orders',    Icon: IconReceipt  },
-  { id: 'settings',  label: 'Settings',  Icon: IconSettings },
+  { id: 'overview',  label: 'Overview',   Icon: IconGrid     },
+  { id: 'inventory', label: 'Inventory',  Icon: IconBox      },
+  { id: 'orders',    label: 'Orders',     Icon: IconReceipt  },
+  { id: 'settings',  label: 'Settings',   Icon: IconSettings },
 ]
 
 function DashboardView({ token, onLogout }: { token: string; onLogout: () => void }) {
@@ -959,8 +1111,8 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
         {tab === 'overview' && (
           <OverviewTab orders={orders} products={products} profile={profile} loading={loading} />
         )}
-        {tab === 'products' && (
-          <ProductsTab
+        {tab === 'inventory' && (
+          <InventoryTab
             products={products} clients={clients} loading={loading}
             token={token} merchantId={merchantId} onRefresh={loadData}
           />
@@ -972,19 +1124,10 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
           />
         )}
         {tab === 'settings' && (
-          <div className="bg-white border border-border rounded-3xl p-7 space-y-0">
-            <h3 className="font-display font-bold text-lg text-ink mb-5 tracking-tight">Account</h3>
-            {profile ? (
-              <>
-                <Row label="Merchant ID"   value={profile.id} />
-                <Row label="Business name" value={profile.name} />
-                <Row label="Email"         value={profile.email} />
-                <Row label="Email status"  value={profile.email_verified ? 'Verified' : 'Not verified'} />
-              </>
-            ) : (
-              <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
-            )}
-          </div>
+          <SettingsTab
+            profile={profile} clients={clients}
+            token={token} onRefresh={loadData}
+          />
         )}
       </main>
     </div>
