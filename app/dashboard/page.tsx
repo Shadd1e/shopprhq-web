@@ -7,9 +7,10 @@ import Logo from '@/components/Logo'
 import {
   merchantLogin, getMerchantProfile, resendVerification,
   getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
-  updatePersona, updateDelivery,
+  updatePersona, updateDelivery, updateOperatorNumber,
+  getMerchantBank, updateMerchantBank,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
-  type MerchantProfile, type Client, type Product, type Order, type OrderDetail,
+  type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type BankAccount,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -986,12 +987,82 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
 // SETTINGS TAB
 // ══════════════════════════════════════════════════════════════════════════
 
+const NG_BANKS = [
+  { code: '044', name: 'Access Bank' },
+  { code: '063', name: 'Access Bank (Diamond)' },
+  { code: '035A', name: 'ALAT by WEMA' },
+  { code: '401', name: 'ASO Savings & Loans' },
+  { code: '023', name: 'Citibank Nigeria' },
+  { code: '050', name: 'Ecobank Nigeria' },
+  { code: '562', name: 'Ekondo Microfinance Bank' },
+  { code: '070', name: 'Fidelity Bank' },
+  { code: '011', name: 'First Bank of Nigeria' },
+  { code: '214', name: 'First City Monument Bank (FCMB)' },
+  { code: '608', name: 'Globus Bank' },
+  { code: '058', name: 'GTBank (Guaranty Trust Bank)' },
+  { code: '030', name: 'Heritage Bank' },
+  { code: '301', name: 'Jaiz Bank' },
+  { code: '082', name: 'Keystone Bank' },
+  { code: '50211', name: 'Kuda Microfinance Bank' },
+  { code: '50515', name: 'Moniepoint Microfinance Bank' },
+  { code: '100004', name: 'OPay Digital Services' },
+  { code: '999991', name: 'PalmPay' },
+  { code: '076', name: 'Polaris Bank' },
+  { code: '101', name: 'Providus Bank' },
+  { code: '221', name: 'Stanbic IBTC Bank' },
+  { code: '068', name: 'Standard Chartered Bank' },
+  { code: '232', name: 'Sterling Bank' },
+  { code: '100', name: 'SunTrust Bank' },
+  { code: '302', name: 'Taj Bank' },
+  { code: '032', name: 'Union Bank of Nigeria' },
+  { code: '033', name: 'United Bank for Africa (UBA)' },
+  { code: '215', name: 'Unity Bank' },
+  { code: '566', name: 'VFD Microfinance Bank' },
+  { code: '035', name: 'Wema Bank' },
+  { code: '057', name: 'Zenith Bank' },
+]
+
 function SettingsTab({ profile, clients, token, onRefresh }: {
   profile: MerchantProfile | null
   clients: Client[]
   token: string
   onRefresh: () => void
 }) {
+  // ── Bank account ─────────────────────────────────────────────────────────
+  const [bank,        setBank]        = useState<BankAccount | null>(null)
+  const [bankLoading, setBankLoading] = useState(true)
+  const [bankWarn,    setBankWarn]    = useState(false)   // show change-warning modal
+  const [bankForm,    setBankForm]    = useState({ account_number: '', bank_code: '' })
+  const [bankSaving,  setBankSaving]  = useState(false)
+  const [bankMsg,     setBankMsg]     = useState('')
+  const [bankErr,     setBankErr]     = useState('')
+
+  useEffect(() => {
+    getMerchantBank(token)
+      .then(setBank)
+      .catch(() => setBank(null))
+      .finally(() => setBankLoading(false))
+  }, [token])
+
+  async function handleSaveBank(e: React.FormEvent) {
+    e.preventDefault()
+    if (!bankForm.account_number.trim()) return setBankErr('Enter your account number.')
+    if (!bankForm.bank_code)             return setBankErr('Select a bank.')
+    const chosen = NG_BANKS.find(b => b.code === bankForm.bank_code)!
+    setBankSaving(true); setBankErr(''); setBankMsg('')
+    try {
+      const updated = await updateMerchantBank(token, {
+        account_number: bankForm.account_number.trim(),
+        bank_name:      chosen.name,
+        bank_code:      chosen.code,
+      })
+      setBank(updated)
+      setBankMsg('Bank account saved ✓')
+      setBankWarn(false)
+      setBankForm({ account_number: '', bank_code: '' })
+    } catch (err: any) { setBankErr(err.detail ?? 'Could not save bank account.') }
+    finally { setBankSaving(false) }
+  }
   // ── Store creation ───────────────────────────────────────────────────────
   const [addOpen,   setAddOpen]   = useState(false)
   const [storeSaving, setStoreSaving] = useState(false)
@@ -1040,6 +1111,11 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   const [deliveryMsg,    setDeliveryMsg]    = useState('')
   const [deliveryErr,    setDeliveryErr]    = useState('')
 
+  // ── Operator number ───────────────────────────────────────────────────────
+  const [opNumber,     setOpNumber]     = useState(selected?.whatsapp_number ?? '')
+  const [opSaving,     setOpSaving]     = useState(false)
+  const [opMsg,        setOpMsg]        = useState('')
+
   // Reset forms when selected store changes
   useEffect(() => {
     const c = clients.find(x => x.id === selectedId) ?? clients[0]
@@ -1052,9 +1128,11 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
       delivery_enabled: c.delivery_enabled ?? false,
       delivery_fee:     String(c.delivery_fee ?? ''),
     })
+    setOpNumber(c.whatsapp_number ?? '')
     setPersonaMsg('')
     setDeliveryMsg('')
     setDeliveryErr('')
+    setOpMsg('')
   }, [selectedId, clients])
 
   async function handleSavePersona(e: React.FormEvent) {
@@ -1090,6 +1168,19 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setDeliverySaving(false) }
   }
 
+  async function handleSaveOperator(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) return
+    const clean = opNumber.replace(/^\+/, '').replace(/\s+/g, '')
+    setOpSaving(true); setOpMsg('')
+    try {
+      await updateOperatorNumber(token, selected.id, clean)
+      setOpMsg('Saved ✓')
+      onRefresh()
+    } catch (err: any) { setOpMsg(err.detail ?? 'Could not save.') }
+    finally { setOpSaving(false) }
+  }
+
   const PERSONALITIES = [
     { value: 'friendly',     label: 'Friendly' },
     { value: 'professional', label: 'Professional' },
@@ -1113,6 +1204,77 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
           </div>
         ) : (
           <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
+        )}
+      </div>
+
+      {/* ── Bank account ── */}
+      <div className="bg-white border border-border rounded-3xl p-7">
+        <h3 className="font-display font-bold text-base text-ink mb-4 tracking-tight">Bank account</h3>
+        {bankLoading ? (
+          <div className="space-y-3">{[1,2].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
+        ) : bank ? (
+          <div className="space-y-0 mb-4">
+            <Row label="Bank"           value={bank.bank_name} />
+            <Row label="Account number" value={`••••${bank.account_number.slice(-4)}`} />
+            {bank.account_name && <Row label="Account name" value={bank.account_name} />}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-4 mb-4">No bank account linked yet.</p>
+        )}
+
+        {bankMsg && <p className="text-xs font-semibold text-green-700 mb-3">{bankMsg}</p>}
+
+        {!bankWarn && (
+          <button
+            onClick={() => { setBankWarn(true); setBankErr(''); setBankMsg('') }}
+            className="text-xs font-semibold border border-border px-4 py-2 rounded-xl
+              hover:border-ink-4 hover:text-ink transition-colors text-ink-3"
+          >
+            {bank ? 'Change bank account' : 'Add bank account'}
+          </button>
+        )}
+
+        {bankWarn && (
+          <div className="mt-3 space-y-4">
+            {bank && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5">
+                <p className="text-sm font-semibold text-amber-800 mb-1">This action is final</p>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  Once you change your bank account, <strong>{bank.bank_name}</strong> cannot be linked to
+                  this merchant account again. This cannot be undone.
+                </p>
+              </div>
+            )}
+            <form onSubmit={handleSaveBank} className="space-y-3">
+              <FormField label="Account number">
+                <input type="text" inputMode="numeric" placeholder="0123456789" maxLength={10}
+                  value={bankForm.account_number}
+                  onChange={e => { setBankForm(p => ({ ...p, account_number: e.target.value })); setBankErr('') }}
+                  className={INPUT} />
+              </FormField>
+              <FormField label="Bank">
+                <select value={bankForm.bank_code}
+                  onChange={e => { setBankForm(p => ({ ...p, bank_code: e.target.value })); setBankErr('') }}
+                  className={INPUT}>
+                  <option value="">Select a bank…</option>
+                  {NG_BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+                </select>
+              </FormField>
+              {bankErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{bankErr}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={bankSaving}
+                  className="bg-ink text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                    hover:bg-ink-2 transition-all disabled:opacity-50">
+                  {bankSaving ? 'Saving…' : bank ? 'Confirm & change' : 'Save bank account'}
+                </button>
+                <button type="button" onClick={() => { setBankWarn(false); setBankErr('') }}
+                  className="text-sm font-semibold text-ink-3 px-4 py-2.5 rounded-xl
+                    hover:bg-bg transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         )}
       </div>
 
@@ -1158,6 +1320,39 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
               </select>
             </div>
           )}
+
+          {/* ── Operator number ── */}
+          <div className="bg-white border border-border rounded-3xl p-7">
+            <div className="mb-5">
+              <h3 className="font-display font-bold text-base text-ink tracking-tight">Operator number</h3>
+              <p className="text-xs text-ink-4 mt-1 leading-relaxed">
+                This WhatsApp number receives a notification for every sale and can be used to confirm orders.
+                Only use a number you have constant access to — it is your direct line to every transaction.
+              </p>
+            </div>
+            <form onSubmit={handleSaveOperator} className="space-y-4">
+              <FormField label="WhatsApp number"
+                hint="International format without the + sign. e.g. 2348012345678">
+                <input type="tel" inputMode="numeric" placeholder="2348012345678"
+                  value={opNumber}
+                  onChange={e => { setOpNumber(e.target.value); setOpMsg('') }}
+                  className={INPUT} />
+              </FormField>
+              <div className="flex items-center justify-between gap-4">
+                <button type="submit" disabled={opSaving}
+                  className="bg-ink text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                    hover:bg-ink-2 transition-all disabled:opacity-50">
+                  {opSaving ? 'Saving…' : 'Save number'}
+                </button>
+                {opMsg && (
+                  <span className={cn('text-xs font-semibold',
+                    opMsg.includes('✓') ? 'text-green-700' : 'text-red-600')}>
+                    {opMsg}
+                  </span>
+                )}
+              </div>
+            </form>
+          </div>
 
           {/* ── AI Persona ── */}
           <div className="bg-white border border-border rounded-3xl p-7">

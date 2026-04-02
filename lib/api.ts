@@ -202,6 +202,44 @@ export async function updateDelivery(
   })
 }
 
+export async function updateOperatorNumber(
+  token: string,
+  clientId: string,
+  whatsapp_number: string,
+) {
+  return req<Client>(`/api/v1/clients/${clientId}/contact`, {
+    method: 'PATCH',
+    headers: bearer(token),
+    body: JSON.stringify({ whatsapp_number }),
+  })
+}
+
+// ── Bank account ───────────────────────────────────────────────────────────
+
+export interface BankAccount {
+  account_number: string
+  bank_name: string
+  bank_code?: string
+  account_name?: string
+}
+
+export async function getMerchantBank(token: string) {
+  return req<BankAccount>('/api/v1/merchants/me/bank-account', {
+    headers: bearer(token),
+  })
+}
+
+export async function updateMerchantBank(
+  token: string,
+  data: { account_number: string; bank_name: string; bank_code: string },
+) {
+  return req<BankAccount>('/api/v1/merchants/me/bank-account', {
+    method: 'POST',
+    headers: bearer(token),
+    body: JSON.stringify(data),
+  })
+}
+
 // ── Products (inventory endpoint — requires X-headers) ────────────────────
 
 export async function getInventory(token: string, merchantId: string, clientId: string) {
