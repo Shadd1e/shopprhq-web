@@ -34,6 +34,7 @@ function IconUser()     { return <svg className={S} viewBox="0 0 24 24" {...P}><
 function IconPrint()    { return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" {...P}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> }
 function IconChevron()  { return <svg className="w-4 h-4" viewBox="0 0 24 24" {...P}><polyline points="6 9 12 15 18 9"/></svg> }
 function IconHistory()  { return <svg className={S} viewBox="0 0 24 24" {...P}><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><polyline points="3 16 3.05 11 8 11"/></svg> }
+function IconMail()    { return <svg className={S} viewBox="0 0 24 24" {...P}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> }
 
 // ══════════════════════════════════════════════════════════════════════════
 // SHARED STYLES + UTILS
@@ -1207,6 +1208,14 @@ function ProfileDropdown({ profile, resendLoading, resendDone, onResend, onHisto
           >
             <IconHistory /> Revenue history
           </button>
+          <a
+            href="mailto:hello@shopprhq.com?subject=ShopprHQ%20Support"
+            onClick={() => setOpen(false)}
+            className="w-full flex items-center gap-2.5 px-5 py-3.5 text-sm font-semibold
+              text-ink-3 hover:text-ink hover:bg-bg transition-colors border-t border-border"
+          >
+            <IconMail /> Contact us
+          </a>
           <button
             onClick={() => { setOpen(false); onLogout() }}
             className="w-full text-left px-5 py-3.5 text-sm font-semibold text-red-600

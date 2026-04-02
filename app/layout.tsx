@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { DM_Sans, Bricolage_Grotesque } from 'next/font/google'
 import './globals.css'
+import DoodleBackground from '@/components/DoodleBackground'
 
 const dmSans = DM_Sans({
   subsets: ['latin'],
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${dmSans.variable} ${bricolage.variable}`}>
       <body className="font-sans bg-bg text-ink antialiased">
+        <DoodleBackground />
         {children}
       </body>
     </html>
