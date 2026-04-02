@@ -17,7 +17,7 @@ const bricolage = Bricolage_Grotesque({
 })
 
 export const metadata: Metadata = {
-  title: 'ShopprHQ — WhatsApp Commerce for Nigerian Businesses',
+  title: 'ShopprHQ — WhatsApp Commerce',
   description:
     'Turn your WhatsApp number into a full storefront. Customers browse, add to cart, and pay — all in the chat. Set up in 60 seconds.',
   metadataBase: new URL('https://shopprhq.com'),
