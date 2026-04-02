@@ -1037,10 +1037,15 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   const [bankMsg,     setBankMsg]     = useState('')
   const [bankErr,     setBankErr]     = useState('')
 
+  const [bankFetchErr, setBankFetchErr] = useState('')
+
   useEffect(() => {
     getMerchantBank(token)
-      .then(setBank)
-      .catch(() => setBank(null))
+      .then(b => { setBank(b); setBankFetchErr('') })
+      .catch((err: any) => {
+        setBank(null)
+        setBankFetchErr(`Could not load bank details (${err?.status ?? 'error'}: ${err?.detail ?? 'unknown'})`)
+      })
       .finally(() => setBankLoading(false))
   }, [token])
 
@@ -1212,6 +1217,8 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
         <h3 className="font-display font-bold text-base text-ink mb-4 tracking-tight">Bank account</h3>
         {bankLoading ? (
           <div className="space-y-3">{[1,2].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
+        ) : bankFetchErr ? (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 font-mono">{bankFetchErr}</p>
         ) : bank ? (
           <div className="space-y-0 mb-4">
             <Row label="Bank"           value={bank.bank_name} />
