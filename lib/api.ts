@@ -171,7 +171,7 @@ export async function createClient(
   token: string,
   data: { name: string; password: string; whatsapp_number?: string | null },
 ) {
-  return req<Client>('/api/v1/clients/', {
+  return req<Client>('/api/v1/clients/with-password/', {
     method: 'POST',
     headers: bearer(token),
     body: JSON.stringify(data),
@@ -205,12 +205,12 @@ export async function updateDelivery(
 export async function updateOperatorNumber(
   token: string,
   clientId: string,
-  whatsapp_number: string,
+  operator_notify_phone: string,
 ) {
-  return req<Client>(`/api/v1/clients/${clientId}/contact`, {
+  return req<Client>(`/api/v1/clients/${clientId}/operator-phone`, {
     method: 'PATCH',
     headers: bearer(token),
-    body: JSON.stringify({ whatsapp_number }),
+    body: JSON.stringify({ operator_notify_phone }),
   })
 }
 

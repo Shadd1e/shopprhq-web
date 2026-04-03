@@ -1009,10 +1009,19 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     e.preventDefault()
     if (!storeForm.name.trim()) return setStoreErr('Store name is required.')
     if (!storeForm.password)    return setStoreErr('Password is required.')
-    const waClean = storeForm.wa.replace(/^\+/, '').replace(/\s+/g, '') || undefined
+    if (storeForm.password.length < 6) return setStoreErr('Password must be at least 6 characters.')
+    // Normalise WhatsApp number to E.164 (+countrycode...)
+    let waClean: string | null = null
+    if (storeForm.wa.trim()) {
+      const digits = storeForm.wa.replace(/\s+/g, '')
+      waClean = digits.startsWith('+') ? digits : `+${digits}`
+      if (!/^\+\d{10,15}$/.test(waClean)) {
+        return setStoreErr('WhatsApp number must include country code, e.g. +2348012345678')
+      }
+    }
     setStoreSaving(true)
     try {
-      await createClient(token, { name: storeForm.name.trim(), password: storeForm.password, whatsapp_number: waClean ?? null })
+      await createClient(token, { name: storeForm.name.trim(), password: storeForm.password, whatsapp_number: waClean })
       setAddOpen(false)
       setStoreForm({ name: '', password: '', wa: '' })
       onRefresh()
@@ -1494,17 +1503,17 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
       {/* Add store modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Create store">
         <form onSubmit={handleAddStore} className="space-y-4">
-          <FormField label="Store name">
+          <FormField label="Store name" hint="1–100 characters. e.g. Lagos Branch, Abuja HQ">
             <input type="text" placeholder="e.g. Lagos Branch" value={storeForm.name}
               onChange={setSF('name')} className={INPUT} />
           </FormField>
-          <FormField label="Store password" hint="Store managers use this to sign in.">
-            <input type="password" placeholder="Create a password" value={storeForm.password}
+          <FormField label="Store password" hint="Minimum 6 characters. Store managers use this to sign in to their dashboard.">
+            <input type="password" placeholder="Min. 6 characters" value={storeForm.password}
               onChange={setSF('password')} autoComplete="new-password" className={INPUT} />
           </FormField>
-          <FormField label="Operator WhatsApp number (optional)"
-            hint="International format, no + sign. e.g. 2348012345678">
-            <input type="tel" placeholder="2348012345678" inputMode="numeric"
+          <FormField label="WhatsApp number (optional)"
+            hint="Include country code with + sign. e.g. +2348012345678 — can be added later.">
+            <input type="tel" placeholder="+2348012345678" inputMode="tel"
               value={storeForm.wa} onChange={setSF('wa')} className={INPUT} />
           </FormField>
           {storeErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{storeErr}</p>}
