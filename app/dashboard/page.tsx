@@ -8,9 +8,9 @@ import {
   merchantLogin, getMerchantProfile, resendVerification,
   getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
   updatePersona, updateDelivery, updateOperatorNumber,
-  getMerchantBank, updateMerchantBank,
+  getSubaccountBanks, verifyBankAccount, registerSubaccount, getSubaccount, deactivateSubaccount,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
-  type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type BankAccount,
+  type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type Subaccount,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -987,87 +987,12 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
 // SETTINGS TAB
 // ══════════════════════════════════════════════════════════════════════════
 
-const NG_BANKS = [
-  { code: '044', name: 'Access Bank' },
-  { code: '063', name: 'Access Bank (Diamond)' },
-  { code: '035A', name: 'ALAT by WEMA' },
-  { code: '401', name: 'ASO Savings & Loans' },
-  { code: '023', name: 'Citibank Nigeria' },
-  { code: '050', name: 'Ecobank Nigeria' },
-  { code: '562', name: 'Ekondo Microfinance Bank' },
-  { code: '070', name: 'Fidelity Bank' },
-  { code: '011', name: 'First Bank of Nigeria' },
-  { code: '214', name: 'First City Monument Bank (FCMB)' },
-  { code: '608', name: 'Globus Bank' },
-  { code: '058', name: 'GTBank (Guaranty Trust Bank)' },
-  { code: '030', name: 'Heritage Bank' },
-  { code: '301', name: 'Jaiz Bank' },
-  { code: '082', name: 'Keystone Bank' },
-  { code: '50211', name: 'Kuda Microfinance Bank' },
-  { code: '50515', name: 'Moniepoint Microfinance Bank' },
-  { code: '100004', name: 'OPay Digital Services' },
-  { code: '999991', name: 'PalmPay' },
-  { code: '076', name: 'Polaris Bank' },
-  { code: '101', name: 'Providus Bank' },
-  { code: '221', name: 'Stanbic IBTC Bank' },
-  { code: '068', name: 'Standard Chartered Bank' },
-  { code: '232', name: 'Sterling Bank' },
-  { code: '100', name: 'SunTrust Bank' },
-  { code: '302', name: 'Taj Bank' },
-  { code: '032', name: 'Union Bank of Nigeria' },
-  { code: '033', name: 'United Bank for Africa (UBA)' },
-  { code: '215', name: 'Unity Bank' },
-  { code: '566', name: 'VFD Microfinance Bank' },
-  { code: '035', name: 'Wema Bank' },
-  { code: '057', name: 'Zenith Bank' },
-]
-
 function SettingsTab({ profile, clients, token, onRefresh }: {
   profile: MerchantProfile | null
   clients: Client[]
   token: string
   onRefresh: () => void
 }) {
-  // ── Bank account ─────────────────────────────────────────────────────────
-  const [bank,        setBank]        = useState<BankAccount | null>(null)
-  const [bankLoading, setBankLoading] = useState(true)
-  const [bankWarn,    setBankWarn]    = useState(false)   // show change-warning modal
-  const [bankForm,    setBankForm]    = useState({ account_number: '', bank_code: '' })
-  const [bankSaving,  setBankSaving]  = useState(false)
-  const [bankMsg,     setBankMsg]     = useState('')
-  const [bankErr,     setBankErr]     = useState('')
-
-  const [bankFetchErr, setBankFetchErr] = useState('')
-
-  useEffect(() => {
-    getMerchantBank(token)
-      .then(b => { setBank(b); setBankFetchErr('') })
-      .catch((err: any) => {
-        setBank(null)
-        setBankFetchErr(`Could not load bank details (${err?.status ?? 'error'}: ${err?.detail ?? 'unknown'})`)
-      })
-      .finally(() => setBankLoading(false))
-  }, [token])
-
-  async function handleSaveBank(e: React.FormEvent) {
-    e.preventDefault()
-    if (!bankForm.account_number.trim()) return setBankErr('Enter your account number.')
-    if (!bankForm.bank_code)             return setBankErr('Select a bank.')
-    const chosen = NG_BANKS.find(b => b.code === bankForm.bank_code)!
-    setBankSaving(true); setBankErr(''); setBankMsg('')
-    try {
-      const updated = await updateMerchantBank(token, {
-        account_number: bankForm.account_number.trim(),
-        bank_name:      chosen.name,
-        bank_code:      chosen.code,
-      })
-      setBank(updated)
-      setBankMsg('Bank account saved ✓')
-      setBankWarn(false)
-      setBankForm({ account_number: '', bank_code: '' })
-    } catch (err: any) { setBankErr(err.detail ?? 'Could not save bank account.') }
-    finally { setBankSaving(false) }
-  }
   // ── Store creation ───────────────────────────────────────────────────────
   const [addOpen,   setAddOpen]   = useState(false)
   const [storeSaving, setStoreSaving] = useState(false)
@@ -1121,6 +1046,30 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   const [opSaving,     setOpSaving]     = useState(false)
   const [opMsg,        setOpMsg]        = useState('')
 
+  // ── Payout account (per-store subaccount) ─────────────────────────────────
+  const [subaccount,        setSubaccount]        = useState<Subaccount | null>(null)
+  const [subaccountLoading, setSubaccountLoading] = useState(false)
+  const [banks,             setBanks]             = useState<{ code: string; name: string }[]>([])
+  const [banksLoading,      setBanksLoading]      = useState(false)
+  const [bankForm,          setBankForm]          = useState({ account_number: '', bank_code: '' })
+  const [verifying,         setVerifying]         = useState(false)
+  const [verifiedName,      setVerifiedName]      = useState('')
+  const [registering,       setRegistering]       = useState(false)
+  const [deactivateWarn,    setDeactivateWarn]    = useState(false)
+  const [deactivating,      setDeactivating]      = useState(false)
+  const [payoutMsg,         setPayoutMsg]         = useState('')
+  const [payoutErr,         setPayoutErr]         = useState('')
+
+  // Load banks list once
+  useEffect(() => {
+    if (!token) return
+    setBanksLoading(true)
+    getSubaccountBanks(token)
+      .then(d => setBanks(d.banks))
+      .catch(() => {})
+      .finally(() => setBanksLoading(false))
+  }, [token])
+
   // Reset forms when selected store changes
   useEffect(() => {
     const c = clients.find(x => x.id === selectedId) ?? clients[0]
@@ -1138,7 +1087,20 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     setDeliveryMsg('')
     setDeliveryErr('')
     setOpMsg('')
-  }, [selectedId, clients])
+    // reset payout state
+    setSubaccount(null)
+    setBankForm({ account_number: '', bank_code: '' })
+    setVerifiedName('')
+    setDeactivateWarn(false)
+    setPayoutMsg('')
+    setPayoutErr('')
+    // load subaccount for this store
+    setSubaccountLoading(true)
+    getSubaccount(token, c.id)
+      .then(setSubaccount)
+      .catch(() => setSubaccount(null))
+      .finally(() => setSubaccountLoading(false))
+  }, [selectedId, clients, token])
 
   async function handleSavePersona(e: React.FormEvent) {
     e.preventDefault()
@@ -1186,6 +1148,47 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setOpSaving(false) }
   }
 
+  async function handleVerifyBank() {
+    if (!bankForm.account_number.trim() || !bankForm.bank_code) {
+      return setPayoutErr('Enter your account number and select a bank.')
+    }
+    setVerifying(true); setPayoutErr(''); setVerifiedName('')
+    try {
+      const res = await verifyBankAccount(token, bankForm.account_number.trim(), bankForm.bank_code)
+      setVerifiedName(res.account_name)
+    } catch (err: any) { setPayoutErr(err.detail ?? 'Could not verify account. Check the number and bank.') }
+    finally { setVerifying(false) }
+  }
+
+  async function handleRegisterSubaccount() {
+    if (!selected || !verifiedName) return
+    setRegistering(true); setPayoutErr('')
+    try {
+      const sa = await registerSubaccount(token, selected.id, {
+        account_bank:   bankForm.bank_code,
+        account_number: bankForm.account_number.trim(),
+        business_name:  selected.name || selected.id,
+      })
+      setSubaccount(sa)
+      setPayoutMsg('Payout account registered ✓')
+      setBankForm({ account_number: '', bank_code: '' })
+      setVerifiedName('')
+    } catch (err: any) { setPayoutErr(err.detail ?? 'Could not register payout account.') }
+    finally { setRegistering(false) }
+  }
+
+  async function handleDeactivateSubaccount() {
+    if (!selected) return
+    setDeactivating(true); setPayoutErr('')
+    try {
+      await deactivateSubaccount(token, selected.id)
+      setSubaccount(null)
+      setDeactivateWarn(false)
+      setPayoutMsg('')
+    } catch (err: any) { setPayoutErr(err.detail ?? 'Could not remove payout account.') }
+    finally { setDeactivating(false) }
+  }
+
   const PERSONALITIES = [
     { value: 'friendly',     label: 'Friendly' },
     { value: 'professional', label: 'Professional' },
@@ -1209,79 +1212,6 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
           </div>
         ) : (
           <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
-        )}
-      </div>
-
-      {/* ── Bank account ── */}
-      <div className="bg-white border border-border rounded-3xl p-7">
-        <h3 className="font-display font-bold text-base text-ink mb-4 tracking-tight">Bank account</h3>
-        {bankLoading ? (
-          <div className="space-y-3">{[1,2].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
-        ) : bankFetchErr ? (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 font-mono">{bankFetchErr}</p>
-        ) : bank ? (
-          <div className="space-y-0 mb-4">
-            <Row label="Bank"           value={bank.bank_name} />
-            <Row label="Account number" value={`••••${bank.account_number.slice(-4)}`} />
-            {bank.account_name && <Row label="Account name" value={bank.account_name} />}
-          </div>
-        ) : (
-          <p className="text-sm text-ink-4 mb-4">No bank account linked yet.</p>
-        )}
-
-        {bankMsg && <p className="text-xs font-semibold text-green-700 mb-3">{bankMsg}</p>}
-
-        {!bankWarn && (
-          <button
-            onClick={() => { setBankWarn(true); setBankErr(''); setBankMsg('') }}
-            className="text-xs font-semibold border border-border px-4 py-2 rounded-xl
-              hover:border-ink-4 hover:text-ink transition-colors text-ink-3"
-          >
-            {bank ? 'Change bank account' : 'Add bank account'}
-          </button>
-        )}
-
-        {bankWarn && (
-          <div className="mt-3 space-y-4">
-            {bank && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5">
-                <p className="text-sm font-semibold text-amber-800 mb-1">This action is final</p>
-                <p className="text-xs text-amber-700 leading-relaxed">
-                  Once you change your bank account, <strong>{bank.bank_name}</strong> cannot be linked to
-                  this merchant account again. This cannot be undone.
-                </p>
-              </div>
-            )}
-            <form onSubmit={handleSaveBank} className="space-y-3">
-              <FormField label="Account number">
-                <input type="text" inputMode="numeric" placeholder="0123456789" maxLength={10}
-                  value={bankForm.account_number}
-                  onChange={e => { setBankForm(p => ({ ...p, account_number: e.target.value })); setBankErr('') }}
-                  className={INPUT} />
-              </FormField>
-              <FormField label="Bank">
-                <select value={bankForm.bank_code}
-                  onChange={e => { setBankForm(p => ({ ...p, bank_code: e.target.value })); setBankErr('') }}
-                  className={INPUT}>
-                  <option value="">Select a bank…</option>
-                  {NG_BANKS.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
-                </select>
-              </FormField>
-              {bankErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{bankErr}</p>}
-              <div className="flex gap-2">
-                <button type="submit" disabled={bankSaving}
-                  className="bg-ink text-white text-sm font-semibold px-5 py-2.5 rounded-xl
-                    hover:bg-ink-2 transition-all disabled:opacity-50">
-                  {bankSaving ? 'Saving…' : bank ? 'Confirm & change' : 'Save bank account'}
-                </button>
-                <button type="button" onClick={() => { setBankWarn(false); setBankErr('') }}
-                  className="text-sm font-semibold text-ink-3 px-4 py-2.5 rounded-xl
-                    hover:bg-bg transition-colors">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
         )}
       </div>
 
@@ -1456,6 +1386,107 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
                 )}
               </div>
             </form>
+          </div>
+          {/* ── Payout account ── */}
+          <div className="bg-white border border-border rounded-3xl p-7">
+            <div className="mb-5">
+              <h3 className="font-display font-bold text-base text-ink tracking-tight">Payout account</h3>
+              <p className="text-xs text-ink-4 mt-1 leading-relaxed">
+                Card payments from this store go directly to this bank account.
+                {clients.length > 1 ? ` — ${selected?.name}` : ''}
+              </p>
+            </div>
+
+            {subaccountLoading ? (
+              <div className="space-y-3">{[1,2].map(i => <div key={i} className="skeleton h-5 rounded" />)}</div>
+            ) : subaccount ? (
+              <>
+                <div className="space-y-0 mb-5">
+                  <Row label="Bank"         value={subaccount.account_bank} />
+                  <Row label="Account"      value={`••••${subaccount.account_number.slice(-4)}`} />
+                  <Row label="Business"     value={subaccount.business_name} />
+                </div>
+                {payoutMsg && <p className="text-xs font-semibold text-green-700 mb-3">{payoutMsg}</p>}
+                {payoutErr && <p className="text-xs text-red-600 mb-3">{payoutErr}</p>}
+                {!deactivateWarn ? (
+                  <button onClick={() => setDeactivateWarn(true)}
+                    className="text-xs font-semibold border border-border px-4 py-2 rounded-xl
+                      hover:border-red-300 hover:text-red-600 transition-colors text-ink-4">
+                    Change payout account
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5">
+                      <p className="text-sm font-semibold text-amber-800 mb-1">This action is final</p>
+                      <p className="text-xs text-amber-700 leading-relaxed">
+                        Once removed, <strong>{subaccount.account_bank}</strong> (••••{subaccount.account_number.slice(-4)}) cannot
+                        be linked to this store again. You will need to set up a new payout account.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={handleDeactivateSubaccount} disabled={deactivating}
+                        className="bg-red-600 text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                          hover:bg-red-700 transition-all disabled:opacity-50">
+                        {deactivating ? 'Removing…' : 'Yes, remove account'}
+                      </button>
+                      <button onClick={() => setDeactivateWarn(false)}
+                        className="text-sm font-semibold text-ink-3 px-4 py-2.5 rounded-xl hover:bg-bg transition-colors">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-4">
+                {payoutMsg && <p className="text-xs font-semibold text-green-700">{payoutMsg}</p>}
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="Account number">
+                    <input type="text" inputMode="numeric" placeholder="0123456789" maxLength={10}
+                      value={bankForm.account_number}
+                      onChange={e => { setBankForm(p => ({ ...p, account_number: e.target.value })); setPayoutErr(''); setVerifiedName('') }}
+                      className={INPUT} />
+                  </FormField>
+                  <FormField label="Bank">
+                    <select value={bankForm.bank_code}
+                      onChange={e => { setBankForm(p => ({ ...p, bank_code: e.target.value })); setPayoutErr(''); setVerifiedName('') }}
+                      className={INPUT}>
+                      <option value="">{banksLoading ? 'Loading banks…' : 'Select bank…'}</option>
+                      {banks.map(b => <option key={b.code} value={b.code}>{b.name}</option>)}
+                    </select>
+                  </FormField>
+                </div>
+                {!verifiedName ? (
+                  <>
+                    {payoutErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{payoutErr}</p>}
+                    <button onClick={handleVerifyBank} disabled={verifying}
+                      className="bg-ink text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                        hover:bg-ink-2 transition-all disabled:opacity-50">
+                      {verifying ? 'Verifying…' : 'Verify account'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+                      <p className="text-xs text-green-700 font-medium mb-0.5">Account verified</p>
+                      <p className="text-sm font-bold text-green-900">{verifiedName}</p>
+                    </div>
+                    {payoutErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{payoutErr}</p>}
+                    <div className="flex gap-2">
+                      <button onClick={handleRegisterSubaccount} disabled={registering}
+                        className="bg-wa text-white text-sm font-semibold px-5 py-2.5 rounded-xl
+                          shadow-wa hover:bg-wa-dark transition-all disabled:opacity-50">
+                        {registering ? 'Registering…' : 'Confirm & register'}
+                      </button>
+                      <button onClick={() => { setVerifiedName(''); setPayoutErr('') }}
+                        className="text-sm font-semibold text-ink-3 px-4 py-2.5 rounded-xl hover:bg-bg transition-colors">
+                        Change
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

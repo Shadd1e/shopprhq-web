@@ -214,29 +214,64 @@ export async function updateOperatorNumber(
   })
 }
 
-// ── Bank account ───────────────────────────────────────────────────────────
+// ── Subaccounts (payout accounts, per store) ──────────────────────────────
 
-export interface BankAccount {
+export interface Subaccount {
+  client_id: string
+  merchant_id: string
+  subaccount_id: string
+  account_bank: string
   account_number: string
-  bank_name: string
-  bank_code?: string
-  account_name?: string
+  business_name: string
+  split_value: string | null
+  split_type: string | null
+  active: boolean
+  created_at: string
 }
 
-export async function getMerchantBank(token: string) {
-  return req<BankAccount>('/api/v1/merchants/me/bank-account', {
+export async function getSubaccountBanks(token: string) {
+  return req<{ banks: { code: string; name: string }[] }>('/api/v1/subaccounts/banks', {
     headers: bearer(token),
   })
 }
 
-export async function updateMerchantBank(
+export async function verifyBankAccount(
   token: string,
-  data: { account_number: string; bank_name: string; bank_code: string },
+  account_number: string,
+  account_bank: string,
 ) {
-  return req<BankAccount>('/api/v1/merchants/me/bank-account', {
+  return req<{ account_name: string; account_number: string; account_bank: string }>(
+    '/api/v1/subaccounts/verify-account',
+    {
+      method: 'POST',
+      headers: bearer(token),
+      body: JSON.stringify({ account_number, account_bank }),
+    },
+  )
+}
+
+export async function registerSubaccount(
+  token: string,
+  clientId: string,
+  data: { account_bank: string; account_number: string; business_name: string },
+) {
+  return req<Subaccount>(`/api/v1/subaccounts/${clientId}`, {
     method: 'POST',
     headers: bearer(token),
     body: JSON.stringify(data),
+  })
+}
+
+export async function getSubaccount(token: string, clientId: string) {
+  return req<Subaccount>(`/api/v1/subaccounts/${clientId}`, {
+    headers: bearer(token),
+  })
+}
+
+export async function deactivateSubaccount(token: string, clientId: string) {
+  return req<{ detail: string }>(`/api/v1/subaccounts/${clientId}`, {
+    method: 'DELETE',
+    headers: bearer(token),
   })
 }
 
