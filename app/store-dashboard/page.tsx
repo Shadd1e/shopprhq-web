@@ -364,20 +364,15 @@ function OrdersTab({ info, storeName }: { info: StoreInfo; storeName: string }) 
     new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
   )
 
-  const totalRevenue = orders
-    .filter(o => o.status === 'FULFILLED')
-    .reduce((s, o) => s + o.total_amount, 0)
-
   const today = new Date().toDateString()
-  const todayCount = orders.filter(o => o.created_at && new Date(o.created_at).toDateString() === today).length
-  const pendingCount = orders.filter(o => ['AWAITING_PICKUP','PENDING_PAYMENT','CREATED'].includes(o.status)).length
+  const todayCount     = orders.filter(o => o.created_at && new Date(o.created_at).toDateString() === today).length
+  const pendingCount   = orders.filter(o => ['AWAITING_PICKUP','PENDING_PAYMENT','CREATED'].includes(o.status)).length
   const fulfilledCount = orders.filter(o => o.status === 'FULFILLED').length
 
   const stats = [
     { label: 'Today',     value: loading ? null : String(todayCount) },
     { label: 'Pending',   value: loading ? null : String(pendingCount) },
     { label: 'Fulfilled', value: loading ? null : String(fulfilledCount) },
-    { label: 'Revenue',   value: loading ? null : fmt(totalRevenue) },
   ]
 
   const FILTERS: { id: OrderFilter; label: string }[] = [
@@ -481,48 +476,82 @@ function OrdersTab({ info, storeName }: { info: StoreInfo; storeName: string }) 
 
 // ── Revenue tab ───────────────────────────────────────────────────────────────
 
+type RevPeriod = 'weekly' | 'monthly'
+
+const STATUS_GROUPS = [
+  { key: 'FULFILLED',        label: 'Fulfilled',        color: 'text-emerald-700' },
+  { key: 'AWAITING_PICKUP',  label: 'Awaiting Pickup',  color: 'text-amber-700' },
+  { key: 'PENDING_PAYMENT',  label: 'Pending Payment',  color: 'text-blue-600' },
+  { key: 'CANCELLED',        label: 'Cancelled',        color: 'text-red-600' },
+  { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', color: 'text-indigo-600' },
+]
+
+function RevenueChart({ data }: { data: RevenueSummary }) {
+  const maxRevenue = Math.max(...data.daily.map(d => d.revenue), 1)
+  if (data.daily.length === 0) return null
+  return (
+    <div className="bg-white border border-border rounded-3xl p-6">
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-4 mb-5">
+        Revenue by {data.period === 'weekly' ? 'week' : 'month'} · fulfilled orders only
+      </p>
+      <div className="flex items-end gap-2 overflow-x-auto pb-2" style={{ minHeight: '120px' }}>
+        {data.daily.map((d, i) => {
+          const heightPct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0
+          return (
+            <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 group"
+              title={`${d.label}: ${fmt(d.revenue)}`}>
+              <p className="text-[10px] font-semibold text-wa opacity-0 group-hover:opacity-100
+                transition-opacity whitespace-nowrap">
+                {fmt(d.revenue)}
+              </p>
+              <div className="relative w-8 bg-bg border border-border rounded-t-lg"
+                style={{ height: '80px' }}>
+                <div
+                  className="absolute bottom-0 left-0 right-0 bg-wa rounded-t-lg transition-all group-hover:bg-wa-dark"
+                  style={{ height: `${heightPct}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-ink-4 text-center leading-tight whitespace-nowrap max-w-[56px] truncate">
+                {d.label}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function RevenueTab({ info }: { info: StoreInfo }) {
   const [data,    setData]    = useState<RevenueSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
-  const [days,    setDays]    = useState(30)
+  const [period,  setPeriod]  = useState<RevPeriod>('weekly')
 
   useEffect(() => {
     let cancelled = false
     setLoading(true); setError('')
-    getRevenueSummary(info.tok, info.mid, info.cid, days)
+    getRevenueSummary(info.tok, info.mid, info.cid, period)
       .then(d => { if (!cancelled) setData(d) })
       .catch(e => { if (!cancelled) setError(e?.detail ?? 'Could not load revenue data.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [info.tok, info.mid, info.cid, days])
+  }, [info.tok, info.mid, info.cid, period])
 
-  const statuses = [
-    { key: 'FULFILLED',        label: 'Fulfilled',        color: 'text-emerald-700' },
-    { key: 'AWAITING_PICKUP',  label: 'Awaiting Pickup',  color: 'text-amber-700' },
-    { key: 'PENDING_PAYMENT',  label: 'Pending Payment',  color: 'text-blue-600' },
-    { key: 'CANCELLED',        label: 'Cancelled',        color: 'text-red-600' },
-    { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', color: 'text-indigo-600' },
-  ]
-
-  // Compute bar chart max for scaling
-  const maxRevenue = data ? Math.max(...data.daily.map(d => d.revenue), 1) : 1
+  const periodLabel = period === 'weekly' ? 'last 8 weeks' : 'last 12 months'
 
   return (
     <div className="space-y-5">
 
-      {/* Period selector */}
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-semibold text-ink-3 shrink-0">Show last:</p>
-        {[7, 14, 30, 90].map(d => (
-          <button key={d} onClick={() => setDays(d)}
+      {/* Period toggle */}
+      <div className="flex items-center gap-1 bg-white border border-border rounded-xl p-1 w-fit">
+        {(['weekly', 'monthly'] as RevPeriod[]).map(p => (
+          <button key={p} onClick={() => setPeriod(p)}
             className={cn(
-              'px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all',
-              days === d
-                ? 'bg-ink text-white border-ink'
-                : 'bg-white text-ink-3 border-border hover:text-ink',
+              'px-5 py-2 rounded-lg text-sm font-semibold transition-all capitalize',
+              period === p ? 'bg-ink text-white' : 'text-ink-3 hover:text-ink hover:bg-bg',
             )}>
-            {d} days
+            {p === 'weekly' ? 'Weekly' : 'Monthly'}
           </button>
         ))}
       </div>
@@ -535,21 +564,28 @@ function RevenueTab({ info }: { info: StoreInfo }) {
         <p className="text-sm text-red-600 text-center py-8">{error}</p>
       ) : data ? (
         <>
-          {/* Total revenue card */}
+          {/* Total revenue for the period */}
           <div className="bg-ink text-white rounded-3xl p-8">
             <p className="text-xs font-semibold uppercase tracking-wider text-white/50 mb-2">
-              Total revenue · last {days} days
+              Revenue · {periodLabel}
             </p>
             <p className="font-display font-extrabold text-4xl">{fmt(data.total_revenue)}</p>
           </div>
 
+          {/* Bar chart */}
+          {data.daily.length > 0
+            ? <RevenueChart data={data} />
+            : <EmptyState icon="📊" title="No revenue yet"
+                desc="Revenue will appear here once fulfilled orders come in." />
+          }
+
           {/* Order counts by status */}
           <div className="bg-white border border-border rounded-3xl p-6">
             <p className="text-xs font-semibold uppercase tracking-wider text-ink-4 mb-4">
-              Orders by status
+              Order breakdown · {periodLabel}
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {statuses.map(s => (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {STATUS_GROUPS.map(s => (
                 <div key={s.key} className="bg-bg border border-border rounded-2xl p-4">
                   <p className="text-[11px] font-semibold text-ink-4 mb-1">{s.label}</p>
                   <p className={cn('font-display font-extrabold text-2xl', s.color)}>
@@ -559,41 +595,6 @@ function RevenueTab({ info }: { info: StoreInfo }) {
               ))}
             </div>
           </div>
-
-          {/* Daily bar chart */}
-          {data.daily.length > 0 && (
-            <div className="bg-white border border-border rounded-3xl p-6">
-              <p className="text-xs font-semibold uppercase tracking-wider text-ink-4 mb-5">
-                Daily revenue (fulfilled orders)
-              </p>
-              <div className="flex items-end gap-1.5 h-28 overflow-x-auto pb-1">
-                {data.daily.map(d => {
-                  const heightPct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0
-                  const label = new Date(d.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })
-                  return (
-                    <div key={d.date} className="flex flex-col items-center gap-1 shrink-0 group"
-                      title={`${label}: ${fmt(d.revenue)}`}>
-                      <div className="relative w-6 bg-bg border border-border rounded-t-md"
-                        style={{ height: '96px' }}>
-                        <div
-                          className="absolute bottom-0 left-0 right-0 bg-wa rounded-t-md transition-all group-hover:bg-wa-dark"
-                          style={{ height: `${heightPct}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              <p className="text-[11px] text-ink-4 mt-2 text-center">
-                {data.daily.length} days shown · hover a bar for the date &amp; amount
-              </p>
-            </div>
-          )}
-
-          {data.daily.length === 0 && (
-            <EmptyState icon="📊" title="No revenue data yet"
-              desc="Revenue will appear here once orders are fulfilled." />
-          )}
         </>
       ) : null}
     </div>

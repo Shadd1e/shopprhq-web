@@ -146,6 +146,20 @@ export async function storeLogin(client_id: string, password: string) {
   })
 }
 
+export async function forgotPassword(email: string) {
+  return req<{ detail: string }>('/api/v1/merchants/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function resetPassword(email: string, code: string, new_password: string) {
+  return req<{ detail: string }>('/api/v1/merchants/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ email, code, new_password }),
+  })
+}
+
 // ── Merchant profile ───────────────────────────────────────────────────────
 
 export async function getMerchantProfile(token: string) {
@@ -240,8 +254,9 @@ export async function toggleClientPermissions(token: string, clientId: string, e
 export interface RevenueSummary {
   total_revenue: number
   counts_by_status: Record<string, number>
-  daily: { date: string; revenue: number }[]
-  days: number
+  daily: { date: string; label: string; revenue: number }[]
+  period: 'daily' | 'weekly' | 'monthly'
+  count: number
 }
 
 export async function getMyStore(token: string) {
@@ -274,8 +289,15 @@ export async function storeDispatchOrder(token: string, orderId: string, merchan
   })
 }
 
-export async function getRevenueSummary(token: string, merchantId: string, clientId: string, days = 30) {
-  const qs = new URLSearchParams({ merchant_id: merchantId, client_id: clientId, days: String(days) })
+export async function getRevenueSummary(
+  token: string,
+  merchantId: string,
+  clientId: string | undefined,
+  period: 'daily' | 'weekly' | 'monthly' = 'weekly',
+  count = 0,
+) {
+  const qs = new URLSearchParams({ merchant_id: merchantId, period, count: String(count) })
+  if (clientId) qs.set('client_id', clientId)
   return req<RevenueSummary>(`/api/v1/orders/revenue-summary?${qs}`, { headers: bearer(token) })
 }
 

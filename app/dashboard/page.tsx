@@ -5,12 +5,13 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '@/components/Logo'
 import {
-  merchantLogin, getMerchantProfile, resendVerification,
+  merchantLogin, getMerchantProfile, resendVerification, forgotPassword, resetPassword,
   getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
   updatePersona, updateDelivery, updateOperatorNumber, setupStorePassword, toggleClientPermissions,
   getSubaccountBanks, verifyBankAccount, registerSubaccount, getSubaccount, deactivateSubaccount,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
-  type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type Subaccount,
+  getRevenueSummary,
+  type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type Subaccount, type RevenueSummary,
 } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -178,12 +179,76 @@ function printReceipt(detail: OrderDetail) {
 // HISTORY VIEW
 // ══════════════════════════════════════════════════════════════════════════
 
-function HistoryView({ orders, onClose, onOrderClick }: {
+type RevPeriod = 'weekly' | 'monthly'
+
+const HISTORY_STATUS_GROUPS = [
+  { key: 'FULFILLED',        label: 'Fulfilled',        color: 'text-emerald-700' },
+  { key: 'AWAITING_PICKUP',  label: 'Awaiting Pickup',  color: 'text-amber-700' },
+  { key: 'PENDING_PAYMENT',  label: 'Pending Payment',  color: 'text-blue-600' },
+  { key: 'CANCELLED',        label: 'Cancelled',        color: 'text-red-600' },
+  { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', color: 'text-indigo-600' },
+]
+
+function RevenueBarChart({ data }: { data: RevenueSummary }) {
+  const maxRevenue = Math.max(...data.daily.map(d => d.revenue), 1)
+  if (data.daily.length === 0) return null
+  return (
+    <div className="bg-white border border-border rounded-3xl p-6">
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-4 mb-5">
+        Revenue by {data.period === 'weekly' ? 'week' : 'month'} · fulfilled orders only
+      </p>
+      <div className="flex items-end gap-2 overflow-x-auto pb-2" style={{ minHeight: '120px' }}>
+        {data.daily.map((d, i) => {
+          const heightPct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0
+          return (
+            <div key={i} className="flex flex-col items-center gap-1.5 shrink-0 group"
+              title={`${d.label}: ${fmt(d.revenue)}`}>
+              <p className="text-[10px] font-semibold text-wa opacity-0 group-hover:opacity-100
+                transition-opacity whitespace-nowrap">
+                {fmt(d.revenue)}
+              </p>
+              <div className="relative w-8 bg-bg border border-border rounded-t-lg"
+                style={{ height: '80px' }}>
+                <div
+                  className="absolute bottom-0 left-0 right-0 bg-wa rounded-t-lg transition-all group-hover:bg-wa-dark"
+                  style={{ height: `${heightPct}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-ink-4 text-center leading-tight whitespace-nowrap max-w-[56px] truncate">
+                {d.label}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function HistoryView({ orders, token, merchantId, onClose, onOrderClick }: {
   orders: Order[]
+  token: string
+  merchantId: string
   onClose: () => void
   onOrderClick: (id: string) => void
 }) {
   const [expandedDay, setExpandedDay] = useState<string | null>(null)
+  const [period,      setPeriod]      = useState<RevPeriod>('weekly')
+  const [revData,     setRevData]     = useState<RevenueSummary | null>(null)
+  const [revLoading,  setRevLoading]  = useState(true)
+  const [revError,    setRevError]    = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setRevLoading(true); setRevError('')
+    getRevenueSummary(token, merchantId, undefined, period)
+      .then(d  => { if (!cancelled) setRevData(d) })
+      .catch(e => { if (!cancelled) setRevError(e?.detail ?? 'Could not load revenue data.') })
+      .finally(() => { if (!cancelled) setRevLoading(false) })
+    return () => { cancelled = true }
+  }, [token, merchantId, period])
+
+  const periodLabel = period === 'weekly' ? 'last 8 weeks' : 'last 12 months'
 
   const days = useMemo(() => {
     const map = new Map<string, Order[]>()
@@ -211,9 +276,6 @@ function HistoryView({ orders, onClose, onOrderClick }: {
       })
   }, [orders])
 
-  const totalRevenue = days.reduce((s, d) => s + d.revenue, 0)
-  const totalOrders  = orders.length
-
   return (
     <div className="fixed inset-0 z-50 bg-bg overflow-y-auto">
       {/* Header */}
@@ -231,76 +293,122 @@ function HistoryView({ orders, onClose, onOrderClick }: {
       </header>
 
       <main className="max-w-3xl mx-auto px-5 py-8 space-y-6">
-        {/* Summary */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white border border-border rounded-2xl p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-2">All-time Revenue</p>
-            <p className="font-display font-extrabold text-2xl text-ink tracking-tight">{fmt(totalRevenue)}</p>
-          </div>
-          <div className="bg-white border border-border rounded-2xl p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-4 mb-2">Total Orders</p>
-            <p className="font-display font-extrabold text-2xl text-ink tracking-tight">{totalOrders}</p>
-          </div>
+
+        {/* Period toggle */}
+        <div className="flex items-center gap-1 bg-white border border-border rounded-xl p-1 w-fit">
+          {(['weekly', 'monthly'] as RevPeriod[]).map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-semibold transition-all capitalize',
+                period === p ? 'bg-ink text-white' : 'text-ink-3 hover:text-ink hover:bg-bg',
+              )}>
+              {p === 'weekly' ? 'Weekly' : 'Monthly'}
+            </button>
+          ))}
         </div>
 
-        {/* Day list */}
-        {days.length === 0 ? (
-          <div className="bg-white border border-border rounded-3xl py-16 text-center">
-            <p className="text-sm text-ink-4">No order history yet.</p>
+        {/* Revenue summary */}
+        {revLoading ? (
+          <div className="space-y-4">
+            {[1,2,3].map(i => <div key={i} className="skeleton h-24 rounded-2xl" />)}
           </div>
-        ) : (
-          <div className="bg-white border border-border rounded-3xl overflow-hidden">
-            {days.map((day, i) => (
-              <div key={day.label} className={cn(i > 0 && 'border-t border-border')}>
-                {/* Day header */}
-                <button
-                  onClick={() => setExpandedDay(expandedDay === day.label ? null : day.label)}
-                  className="w-full flex items-center justify-between px-6 py-4 hover:bg-bg/50
-                    transition-colors text-left">
-                  <div>
-                    <p className="text-sm font-semibold text-ink">{day.label}</p>
-                    <p className="text-xs text-ink-4 mt-0.5">
-                      {day.count} order{day.count !== 1 ? 's' : ''}
+        ) : revError ? (
+          <p className="text-sm text-red-600 text-center py-4">{revError}</p>
+        ) : revData ? (
+          <>
+            <div className="bg-ink text-white rounded-3xl p-8">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/50 mb-2">
+                Revenue · {periodLabel}
+              </p>
+              <p className="font-display font-extrabold text-4xl">{fmt(revData.total_revenue)}</p>
+            </div>
+
+            {revData.daily.length > 0
+              ? <RevenueBarChart data={revData} />
+              : <div className="bg-white border border-border rounded-3xl py-12 text-center">
+                  <p className="text-sm text-ink-4">No revenue yet for this period.</p>
+                </div>
+            }
+
+            <div className="bg-white border border-border rounded-3xl p-6">
+              <p className="text-xs font-semibold uppercase tracking-wider text-ink-4 mb-4">
+                Order breakdown · {periodLabel}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {HISTORY_STATUS_GROUPS.map(s => (
+                  <div key={s.key} className="bg-bg border border-border rounded-2xl p-4">
+                    <p className="text-[11px] font-semibold text-ink-4 mb-1">{s.label}</p>
+                    <p className={cn('font-display font-extrabold text-2xl', s.color)}>
+                      {revData.counts_by_status[s.key] ?? 0}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-display font-bold text-base text-ink">{fmt(day.revenue)}</span>
-                    <span className={cn('text-ink-4 transition-transform',
-                      expandedDay === day.label && 'rotate-180')}>
-                      <IconChevron />
-                    </span>
-                  </div>
-                </button>
-
-                {/* Expanded orders */}
-                {expandedDay === day.label && (
-                  <div className="border-t border-border bg-bg/40 divide-y divide-border">
-                    {day.orders.map(o => (
-                      <div key={o.id} onClick={() => onOrderClick(o.id)}
-                        className="px-6 py-3.5 flex items-center gap-4 hover:bg-bg
-                          transition-colors cursor-pointer">
-                        <span className="font-mono text-xs font-semibold text-ink bg-white border
-                          border-border px-2.5 py-1 rounded-lg shrink-0">
-                          {o.order_code}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-ink truncate">
-                            {o.customer_name || o.user_id}
-                          </p>
-                          <p className="text-xs text-ink-4 mt-0.5">{timeAgo(o.created_at)}</p>
-                        </div>
-                        <span className="text-sm font-semibold text-ink shrink-0">
-                          {fmt(o.total_amount)}
-                        </span>
-                        <StatusBadge status={o.status} />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          </>
+        ) : null}
+
+        {/* Order list */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-ink-4 mb-3 px-1">
+            All orders · by day
+          </p>
+          {days.length === 0 ? (
+            <div className="bg-white border border-border rounded-3xl py-16 text-center">
+              <p className="text-sm text-ink-4">No order history yet.</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-border rounded-3xl overflow-hidden">
+              {days.map((day, i) => (
+                <div key={day.label} className={cn(i > 0 && 'border-t border-border')}>
+                  <button
+                    onClick={() => setExpandedDay(expandedDay === day.label ? null : day.label)}
+                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-bg/50
+                      transition-colors text-left">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{day.label}</p>
+                      <p className="text-xs text-ink-4 mt-0.5">
+                        {day.count} order{day.count !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-display font-bold text-base text-ink">{fmt(day.revenue)}</span>
+                      <span className={cn('text-ink-4 transition-transform',
+                        expandedDay === day.label && 'rotate-180')}>
+                        <IconChevron />
+                      </span>
+                    </div>
+                  </button>
+
+                  {expandedDay === day.label && (
+                    <div className="border-t border-border bg-bg/40 divide-y divide-border">
+                      {day.orders.map(o => (
+                        <div key={o.id} onClick={() => onOrderClick(o.id)}
+                          className="px-6 py-3.5 flex items-center gap-4 hover:bg-bg
+                            transition-colors cursor-pointer">
+                          <span className="font-mono text-xs font-semibold text-ink bg-white border
+                            border-border px-2.5 py-1 rounded-lg shrink-0">
+                            {o.order_code}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-ink truncate">
+                              {o.customer_name || o.user_id}
+                            </p>
+                            <p className="text-xs text-ink-4 mt-0.5">{timeAgo(o.created_at)}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-ink shrink-0">
+                            {fmt(o.total_amount)}
+                          </span>
+                          <StatusBadge status={o.status} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </main>
     </div>
   )
@@ -913,13 +1021,26 @@ function FormField({ label, hint, children }: { label: string; hint?: string; ch
 // LOGIN VIEW
 // ══════════════════════════════════════════════════════════════════════════
 
+type LoginView_Screen = 'login' | 'forgot' | 'reset'
+
 function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
+  const [screen,  setScreen]  = useState<LoginView_Screen>('login')
+  // Login
   const [mid,     setMid]     = useState('')
   const [pin,     setPin]     = useState('')
+  // Forgot
+  const [fEmail,  setFEmail]  = useState('')
+  const [fCode,   setFCode]   = useState('')
+  const [fPw,     setFPw]     = useState('')
+  const [fPwConf, setFPwConf] = useState('')
+  // Shared
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState('')
+  const [success, setSuccess] = useState('')
 
-  async function handleSubmit(e: React.FormEvent) {
+  function resetForgot() { setFEmail(''); setFCode(''); setFPw(''); setFPwConf(''); setError(''); setSuccess('') }
+
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     if (!mid.trim()) return setError('Enter your Merchant ID.')
@@ -936,38 +1057,164 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
     } finally { setLoading(false) }
   }
 
+  async function handleForgotSend(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (!fEmail.trim() || !fEmail.includes('@')) return setError('Enter a valid email address.')
+    setLoading(true)
+    try {
+      await forgotPassword(fEmail.trim().toLowerCase())
+      setSuccess('Check your email — a 6-digit code has been sent.')
+      setScreen('reset')
+    } catch (err: any) {
+      setError(err.detail ?? 'Could not send reset code. Try again.')
+    } finally { setLoading(false) }
+  }
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (!fCode.trim() || fCode.length !== 6) return setError('Enter the 6-digit code from your email.')
+    if (fPw.length < 6) return setError('New password must be at least 6 characters.')
+    if (fPw !== fPwConf) return setError('Passwords do not match.')
+    setLoading(true)
+    try {
+      await resetPassword(fEmail.trim().toLowerCase(), fCode.trim(), fPw)
+      resetForgot()
+      setScreen('login')
+      setSuccess('Password updated — sign in with your new password.')
+    } catch (err: any) {
+      setError(err.detail ?? 'Could not reset password. Check the code and try again.')
+    } finally { setLoading(false) }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-5">
       <div className="w-full max-w-sm py-8">
         <div className="flex justify-center mb-8"><Logo /></div>
         <div className="bg-white rounded-3xl border border-border shadow-lg p-9">
-          <h1 className="font-display font-extrabold text-[1.45rem] tracking-tight text-ink mb-1.5">
-            Merchant sign in
-          </h1>
-          <p className="text-sm text-ink-4 mb-7 leading-relaxed">
-            Sign in with your Merchant ID and 4-digit PIN.
-          </p>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <FormField label="Merchant ID">
-              <input type="text" placeholder="e.g. MR1001" value={mid}
-                onChange={e => { setMid(e.target.value); setError('') }}
-                autoComplete="username" autoCapitalize="characters" spellCheck={false}
-                className={INPUT} />
-            </FormField>
-            <FormField label="PIN">
-              <input type="password" placeholder="••••" maxLength={4} inputMode="numeric"
-                value={pin} onChange={e => { setPin(e.target.value); setError('') }}
-                autoComplete="current-password" className={INPUT} />
-            </FormField>
-            {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
-            <button type="submit" disabled={loading}
-              className="w-full bg-ink text-white font-semibold text-sm py-3.5 rounded-2xl
-                hover:bg-ink-2 transition-all hover:-translate-y-0.5
-                disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
-          </form>
+
+          {screen === 'login' && (
+            <>
+              <h1 className="font-display font-extrabold text-[1.45rem] tracking-tight text-ink mb-1.5">
+                Merchant sign in
+              </h1>
+              <p className="text-sm text-ink-4 mb-7 leading-relaxed">
+                Sign in with your Merchant ID and password.
+              </p>
+              {success && (
+                <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
+                  {success}
+                </div>
+              )}
+              <form onSubmit={handleLogin} className="space-y-4">
+                <FormField label="Merchant ID">
+                  <input type="text" placeholder="e.g. MR1001" value={mid}
+                    onChange={e => { setMid(e.target.value); setError(''); setSuccess('') }}
+                    autoComplete="username" autoCapitalize="characters" spellCheck={false}
+                    className={INPUT} />
+                </FormField>
+                <div>
+                  <FormField label="Password">
+                    <input type="password" placeholder="Your password" value={pin}
+                      onChange={e => { setPin(e.target.value); setError(''); setSuccess('') }}
+                      autoComplete="current-password" className={INPUT} />
+                  </FormField>
+                  <div className="text-right mt-1.5">
+                    <button type="button"
+                      onClick={() => { setScreen('forgot'); setError(''); setSuccess('') }}
+                      className="text-xs font-semibold text-wa-dark hover:underline">
+                      Forgot password?
+                    </button>
+                  </div>
+                </div>
+                {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+                <button type="submit" disabled={loading}
+                  className="w-full bg-ink text-white font-semibold text-sm py-3.5 rounded-2xl
+                    hover:bg-ink-2 transition-all hover:-translate-y-0.5
+                    disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none">
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {screen === 'forgot' && (
+            <>
+              <button onClick={() => { setScreen('login'); setError('') }}
+                className="text-xs font-semibold text-ink-3 hover:text-ink mb-5 flex items-center gap-1">
+                ← Back to sign in
+              </button>
+              <h1 className="font-display font-extrabold text-[1.3rem] tracking-tight text-ink mb-1.5">
+                Reset your password
+              </h1>
+              <p className="text-sm text-ink-4 mb-7 leading-relaxed">
+                Enter the email address on your merchant account. We'll send a 6-digit code.
+              </p>
+              <form onSubmit={handleForgotSend} className="space-y-4">
+                <FormField label="Email address">
+                  <input type="email" placeholder="you@example.com" value={fEmail}
+                    onChange={e => { setFEmail(e.target.value); setError('') }}
+                    autoComplete="email" className={INPUT} autoFocus />
+                </FormField>
+                {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+                <button type="submit" disabled={loading}
+                  className="w-full bg-ink text-white font-semibold text-sm py-3.5 rounded-2xl
+                    hover:bg-ink-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                  {loading ? 'Sending…' : 'Send reset code'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {screen === 'reset' && (
+            <>
+              <button onClick={() => { setScreen('forgot'); setError('') }}
+                className="text-xs font-semibold text-ink-3 hover:text-ink mb-5 flex items-center gap-1">
+                ← Back
+              </button>
+              <h1 className="font-display font-extrabold text-[1.3rem] tracking-tight text-ink mb-1.5">
+                Enter your code
+              </h1>
+              {success && (
+                <div className="mb-5 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800">
+                  {success}
+                </div>
+              )}
+              <p className="text-sm text-ink-4 mb-6 leading-relaxed">
+                Check <strong>{fEmail}</strong> for the 6-digit code and enter your new password below.
+              </p>
+              <form onSubmit={handleReset} className="space-y-4">
+                <FormField label="6-digit code">
+                  <input type="text" placeholder="123456" inputMode="numeric" maxLength={6}
+                    value={fCode} onChange={e => { setFCode(e.target.value.replace(/\D/g,'')); setError('') }}
+                    autoComplete="one-time-code" className={INPUT} autoFocus />
+                </FormField>
+                <FormField label="New password" hint="Minimum 6 characters.">
+                  <input type="password" placeholder="New password" value={fPw}
+                    onChange={e => { setFPw(e.target.value); setError('') }}
+                    autoComplete="new-password" className={INPUT} />
+                </FormField>
+                <FormField label="Confirm new password">
+                  <input type="password" placeholder="Repeat password" value={fPwConf}
+                    onChange={e => { setFPwConf(e.target.value); setError('') }}
+                    autoComplete="new-password" className={INPUT} />
+                </FormField>
+                {error && <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+                <button type="submit" disabled={loading}
+                  className="w-full bg-wa text-white font-semibold text-sm py-3.5 rounded-2xl
+                    shadow-wa hover:bg-wa-dark transition-all disabled:opacity-60 disabled:cursor-not-allowed">
+                  {loading ? 'Updating…' : 'Set new password'}
+                </button>
+                <button type="button" onClick={() => handleForgotSend({ preventDefault: () => {} } as any)}
+                  className="w-full text-xs text-ink-4 hover:text-ink text-center py-1 transition-colors">
+                  Didn't receive it? Resend code
+                </button>
+              </form>
+            </>
+          )}
         </div>
+
         <div className="mt-5 space-y-3 text-center">
           <p className="text-sm text-ink-4">
             New here?{' '}
@@ -1342,6 +1589,14 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
             ))}
           </div>
         )}
+        <p className="text-xs text-ink-4 mt-4 leading-relaxed">
+          Need to remove a store? Reach us at{' '}
+          <a href="mailto:hello@shopprhq.com?subject=Remove%20Store%20Request"
+            className="text-wa-dark font-semibold hover:underline">
+            hello@shopprhq.com
+          </a>{' '}
+          and we'll take care of it.
+        </p>
       </div>
 
       {/* ── Per-store config ── */}
@@ -2034,6 +2289,8 @@ function DashboardView({ token, onLogout }: { token: string; onLogout: () => voi
       {historyOpen && (
         <HistoryView
           orders={orders}
+          token={token}
+          merchantId={merchantId}
           onClose={() => setHistoryOpen(false)}
           onOrderClick={(id) => { openOrderDetail(id) }}
         />
