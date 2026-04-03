@@ -603,6 +603,39 @@ function RevenueTab({ info }: { info: StoreInfo }) {
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
+// ── Confirm dialog (store dashboard) ──────────────────────────────────────────
+
+function StoreConfirmDialog({
+  open, title, message, onConfirm, onCancel,
+}: {
+  open: boolean; title: string; message: string
+  onConfirm: () => void; onCancel: () => void
+}) {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl border border-border shadow-xl w-full max-w-sm p-7 space-y-4">
+        <div>
+          <p className="font-display font-bold text-base text-ink">{title}</p>
+          <p className="text-sm text-ink-4 mt-1 leading-relaxed">{message}</p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onCancel}
+            className="flex-1 border border-border text-sm font-semibold text-ink-3 py-2.5
+              rounded-xl hover:bg-bg transition-all">
+            Cancel
+          </button>
+          <button onClick={onConfirm}
+            className="flex-1 bg-wa text-white text-sm font-semibold py-2.5 rounded-xl
+              shadow-wa hover:bg-wa-dark transition-all">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SettingsTab({ info, store, onStoreRefresh }: {
   info: StoreInfo
   store: Client | null
@@ -619,6 +652,9 @@ function SettingsTab({ info, store, onStoreRefresh }: {
   const [deliveryMsg,     setDeliveryMsg]     = useState('')
   const [deliveryErr,     setDeliveryErr]     = useState('')
 
+  // Confirm dialog
+  const [confirm, setConfirm] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
+
   // Sync form when store loads
   useEffect(() => {
     if (store) {
@@ -629,9 +665,7 @@ function SettingsTab({ info, store, onStoreRefresh }: {
     }
   }, [store])
 
-  async function handleSaveDelivery(e: React.FormEvent) {
-    e.preventDefault()
-    if (deliveryForm.enabled && !deliveryForm.fee) return setDeliveryErr('Enter a delivery fee.')
+  async function doSaveDelivery() {
     setDeliverySaving(true); setDeliveryMsg(''); setDeliveryErr('')
     try {
       await storeUpdateDelivery(info.tok, info.cid, {
@@ -644,7 +678,28 @@ function SettingsTab({ info, store, onStoreRefresh }: {
     finally { setDeliverySaving(false) }
   }
 
+  function handleSaveDelivery(e: React.FormEvent) {
+    e.preventDefault()
+    if (deliveryForm.enabled && !deliveryForm.fee) return setDeliveryErr('Enter a delivery fee.')
+    setConfirm({
+      title:     'Save delivery settings?',
+      message:   `Delivery will be ${deliveryForm.enabled ? `enabled with a ₦${deliveryForm.fee} fee` : 'disabled'} for this store.`,
+      onConfirm: () => { setConfirm(null); doSaveDelivery() },
+    })
+  }
+
   return (
+    <>
+    {confirm && (
+      <StoreConfirmDialog
+        open
+        title={confirm.title}
+        message={confirm.message}
+        onConfirm={confirm.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
+    )}
+
     <div className="space-y-6">
 
       {/* Store info */}
@@ -652,14 +707,20 @@ function SettingsTab({ info, store, onStoreRefresh }: {
         <h3 className="font-display font-bold text-base text-ink mb-4 tracking-tight">Store info</h3>
         <div className="divide-y divide-border">
           {[
-            { label: 'Store name',  value: store?.name ?? info.cid },
-            { label: 'Store ID',    value: info.cid,  mono: true },
-            { label: 'Merchant ID', value: info.mid,  mono: true },
-            { label: 'WhatsApp',    value: store?.whatsapp_number ?? 'Not connected' },
+            { label: 'Store name',          value: store?.name ?? info.cid },
+            { label: 'Store ID',            value: info.cid,  mono: true },
+            { label: 'Merchant ID',         value: info.mid,  mono: true },
+            { label: 'Customer WhatsApp',   value: store?.whatsapp_number ?? 'Not connected' },
+            { label: 'Notification number', value: store?.operator_notify_phone
+                ? `+${store.operator_notify_phone}` : 'Not set — configure in merchant dashboard' },
           ].map(row => (
-            <div key={row.label} className="py-3.5 flex items-center justify-between">
-              <span className="text-sm text-ink-3">{row.label}</span>
-              <span className={cn('text-sm font-semibold text-ink', row.mono && 'font-mono text-[13px]')}>
+            <div key={row.label} className="py-3.5 flex items-center justify-between gap-4">
+              <span className="text-sm text-ink-3 shrink-0">{row.label}</span>
+              <span className={cn(
+                'text-sm font-semibold text-ink text-right',
+                row.mono && 'font-mono text-[13px]',
+                !store?.operator_notify_phone && row.label === 'Notification number' && 'text-ink-4 font-normal text-xs',
+              )}>
                 {row.value}
               </span>
             </div>
@@ -731,6 +792,7 @@ function SettingsTab({ info, store, onStoreRefresh }: {
         </p>
       </div>
     </div>
+    </>
   )
 }
 

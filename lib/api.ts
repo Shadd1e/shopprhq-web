@@ -59,6 +59,7 @@ export interface Client {
   name: string
   merchant_id: string
   whatsapp_number?: string
+  operator_notify_phone?: string
   assistant_name?: string
   assistant_personality?: string
   delivery_enabled?: boolean

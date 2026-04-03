@@ -1355,12 +1355,8 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     } finally { setStoreSaving(false) }
   }
 
-  async function handleSetupPassword(e: React.FormEvent) {
-    e.preventDefault()
+  async function doSetupPassword() {
     if (!setupPwTarget) return
-    if (!setupPwForm.password) return setSetupPwErr('Password is required.')
-    if (setupPwForm.password.length < 6) return setSetupPwErr('Password must be at least 6 characters.')
-    if (setupPwForm.password !== setupPwForm.confirm) return setSetupPwErr('Passwords do not match.')
     setSetupPwSaving(true); setSetupPwErr('')
     try {
       await setupStorePassword(token, setupPwTarget.id, setupPwForm.password)
@@ -1371,6 +1367,19 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setSetupPwSaving(false) }
   }
 
+  function handleSetupPassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!setupPwTarget) return
+    if (!setupPwForm.password) return setSetupPwErr('Password is required.')
+    if (setupPwForm.password.length < 6) return setSetupPwErr('Password must be at least 6 characters.')
+    if (setupPwForm.password !== setupPwForm.confirm) return setSetupPwErr('Passwords do not match.')
+    setConfirm({
+      title:     `Set password for ${setupPwTarget.name}?`,
+      message:   'Store managers will use this password to sign in to the store dashboard.',
+      onConfirm: () => { setConfirm(null); doSetupPassword() },
+    })
+  }
+
   // ── Store selector for persona/delivery ──────────────────────────────────
   const [selectedId, setSelectedId] = useState(clients[0]?.id ?? '')
   const selected = clients.find(c => c.id === selectedId) ?? clients[0]
@@ -1378,7 +1387,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   // ── Persona ──────────────────────────────────────────────────────────────
   const [personaForm, setPersonaForm] = useState({
     assistant_name:        selected?.assistant_name        ?? '',
-    assistant_personality: selected?.assistant_personality ?? 'friendly',
+    assistant_personality: selected?.assistant_personality ?? 'friendly_casual',
   })
   const [personaSaving, setPersonaSaving] = useState(false)
   const [personaMsg,    setPersonaMsg]    = useState('')
@@ -1393,9 +1402,14 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   const [deliveryErr,    setDeliveryErr]    = useState('')
 
   // ── Operator number ───────────────────────────────────────────────────────
-  const [opNumber,     setOpNumber]     = useState(selected?.whatsapp_number ?? '')
+  const [opNumber,     setOpNumber]     = useState(selected?.operator_notify_phone ?? '')
   const [opSaving,     setOpSaving]     = useState(false)
   const [opMsg,        setOpMsg]        = useState('')
+
+  // ── Confirm dialog ────────────────────────────────────────────────────────
+  const [confirm, setConfirm] = useState<{
+    title: string; message: string; onConfirm: () => void
+  } | null>(null)
 
   // ── Payout account (per-store subaccount) ─────────────────────────────────
   const [subaccount,        setSubaccount]        = useState<Subaccount | null>(null)
@@ -1427,13 +1441,13 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     if (!c) return
     setPersonaForm({
       assistant_name:        c.assistant_name        ?? '',
-      assistant_personality: c.assistant_personality ?? 'friendly',
+      assistant_personality: c.assistant_personality ?? 'friendly_casual',
     })
     setDeliveryForm({
       delivery_enabled: c.delivery_enabled ?? false,
       delivery_fee:     String(c.delivery_fee ?? ''),
     })
-    setOpNumber(c.whatsapp_number ?? '')
+    setOpNumber(c.operator_notify_phone ?? '')
     setPersonaMsg('')
     setDeliveryMsg('')
     setDeliveryErr('')
@@ -1453,8 +1467,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
       .finally(() => setSubaccountLoading(false))
   }, [selectedId, clients, token])
 
-  async function handleSavePersona(e: React.FormEvent) {
-    e.preventDefault()
+  async function doSavePersona() {
     if (!selected) return
     setPersonaSaving(true); setPersonaMsg('')
     try {
@@ -1468,12 +1481,18 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setPersonaSaving(false) }
   }
 
-  async function handleSaveDelivery(e: React.FormEvent) {
+  function handleSavePersona(e: React.FormEvent) {
     e.preventDefault()
     if (!selected) return
-    if (deliveryForm.delivery_enabled && !deliveryForm.delivery_fee) {
-      return setDeliveryErr('Enter a delivery fee.')
-    }
+    setConfirm({
+      title:     'Save AI persona?',
+      message:   `This updates the assistant name and personality for "${selected.name}".`,
+      onConfirm: () => { setConfirm(null); doSavePersona() },
+    })
+  }
+
+  async function doSaveDelivery() {
+    if (!selected) return
     setDeliverySaving(true); setDeliveryErr(''); setDeliveryMsg('')
     try {
       await updateDelivery(token, selected.id, {
@@ -1486,8 +1505,22 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setDeliverySaving(false) }
   }
 
-  async function handleSaveOperator(e: React.FormEvent) {
+  function handleSaveDelivery(e: React.FormEvent) {
     e.preventDefault()
+    if (!selected) return
+    if (deliveryForm.delivery_enabled && !deliveryForm.delivery_fee) {
+      return setDeliveryErr('Enter a delivery fee.')
+    }
+    setConfirm({
+      title:     'Save delivery settings?',
+      message:   `Delivery will be ${deliveryForm.delivery_enabled
+        ? `enabled with a ₦${deliveryForm.delivery_fee} flat fee`
+        : 'disabled'} for "${selected.name}".`,
+      onConfirm: () => { setConfirm(null); doSaveDelivery() },
+    })
+  }
+
+  async function doSaveOperator() {
     if (!selected) return
     const clean = opNumber.replace(/^\+/, '').replace(/\s+/g, '')
     setOpSaving(true); setOpMsg('')
@@ -1497,6 +1530,18 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
       onRefresh()
     } catch (err: any) { setOpMsg(err.detail ?? 'Could not save.') }
     finally { setOpSaving(false) }
+  }
+
+  function handleSaveOperator(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) return
+    const clean = opNumber.replace(/^\+/, '').replace(/\s+/g, '')
+    if (!clean) return setOpMsg('Enter a valid WhatsApp number.')
+    setConfirm({
+      title:     'Save notification number?',
+      message:   `+${clean} will receive order and payment alerts for "${selected.name}". Make sure this is your personal WhatsApp number, not the customer-facing store number.`,
+      onConfirm: () => { setConfirm(null); doSaveOperator() },
+    })
   }
 
   async function handleVerifyBank() {
@@ -1511,7 +1556,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setVerifying(false) }
   }
 
-  async function handleRegisterSubaccount() {
+  async function doRegisterSubaccount() {
     if (!selected || !verifiedName) return
     setRegistering(true); setPayoutErr('')
     try {
@@ -1528,7 +1573,16 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setRegistering(false) }
   }
 
-  async function handleDeactivateSubaccount() {
+  function handleRegisterSubaccount() {
+    if (!selected || !verifiedName) return
+    setConfirm({
+      title:     'Register payout account?',
+      message:   `Card payments for "${selected.name}" will be settled to ${verifiedName} (••••${bankForm.account_number.slice(-4)}).`,
+      onConfirm: () => { setConfirm(null); doRegisterSubaccount() },
+    })
+  }
+
+  async function doDeactivateSubaccount() {
     if (!selected) return
     setDeactivating(true); setPayoutErr('')
     try {
@@ -1540,14 +1594,43 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     finally { setDeactivating(false) }
   }
 
+  function handleDeactivateSubaccount() {
+    setConfirm({
+      title:     'Remove payout account?',
+      message:   'This cannot be undone. You will need to set up a new payout account to receive card payments.',
+      onConfirm: () => { setConfirm(null); doDeactivateSubaccount() },
+    })
+  }
+
   const PERSONALITIES = [
-    { value: 'friendly',     label: 'Friendly' },
-    { value: 'professional', label: 'Professional' },
-    { value: 'casual',       label: 'Casual' },
-    { value: 'formal',       label: 'Formal' },
+    { value: 'friendly_casual',    label: 'Friendly & Casual' },
+    { value: 'professional',       label: 'Professional' },
+    { value: 'warm_enthusiastic',  label: 'Warm & Enthusiastic' },
   ]
 
   return (
+    <>
+    {/* Confirm dialog */}
+    {confirm && (
+      <Modal open onClose={() => setConfirm(null)} title={confirm.title}>
+        <div className="space-y-5">
+          <p className="text-sm text-ink-4 leading-relaxed">{confirm.message}</p>
+          <div className="flex gap-3">
+            <button onClick={() => setConfirm(null)}
+              className="flex-1 border border-border text-sm font-semibold text-ink-3 py-2.5
+                rounded-xl hover:bg-bg transition-all">
+              Cancel
+            </button>
+            <button onClick={confirm.onConfirm}
+              className="flex-1 bg-wa text-white text-sm font-semibold py-2.5 rounded-xl
+                shadow-wa hover:bg-wa-dark transition-all">
+              Confirm
+            </button>
+          </div>
+        </div>
+      </Modal>
+    )}
+
     <div className="space-y-6">
 
       {/* ── Account ── */}
@@ -1615,15 +1698,15 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
           {/* ── Operator number ── */}
           <div className="bg-white border border-border rounded-3xl p-7">
             <div className="mb-5">
-              <h3 className="font-display font-bold text-base text-ink tracking-tight">Operator number</h3>
+              <h3 className="font-display font-bold text-base text-ink tracking-tight">Operator notification number</h3>
               <p className="text-xs text-ink-4 mt-1 leading-relaxed">
-                This WhatsApp number receives a notification for every sale and can be used to confirm orders.
-                Only use a number you have constant access to — it is your direct line to every transaction.
+                Your personal WhatsApp number that receives an alert for every new order and payment.
+                This is <strong>not</strong> the number customers message — that is your store's WhatsApp business number set up during onboarding.
               </p>
             </div>
             <form onSubmit={handleSaveOperator} className="space-y-4">
-              <FormField label="WhatsApp number"
-                hint="International format without the + sign. e.g. 2348012345678">
+              <FormField label="Your WhatsApp number"
+                hint="Include country code without the + sign. e.g. 2348012345678">
                 <input type="tel" inputMode="numeric" placeholder="2348012345678"
                   value={opNumber}
                   onChange={e => { setOpNumber(e.target.value); setOpMsg('') }}
@@ -1926,6 +2009,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
         </form>
       </Modal>
     </div>
+    </>
   )
 }
 
