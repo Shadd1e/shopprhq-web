@@ -24,7 +24,7 @@ export default function StoreLoginPage() {
 
   // If already logged in, skip to dashboard
   useEffect(() => {
-    if (localStorage.getItem('tok') && localStorage.getItem('cid')) {
+    if (sessionStorage.getItem('tok') && sessionStorage.getItem('cid')) {
       router.replace('/store-dashboard')
     }
   }, [router])
@@ -38,10 +38,10 @@ export default function StoreLoginPage() {
     setLoading(true)
     try {
       const data = await storeLogin(clientId.trim().toUpperCase(), password)
-      localStorage.setItem('tok',   data.access_token)
-      localStorage.setItem('cid',   data.client_id)
-      localStorage.setItem('cname', data.store_name)
-      localStorage.setItem('mid',   data.merchant_id)
+      sessionStorage.setItem('tok',   data.access_token)
+      sessionStorage.setItem('cid',   data.client_id)
+      sessionStorage.setItem('cname', data.store_name)
+      sessionStorage.setItem('mid',   data.merchant_id)
       router.replace('/store-dashboard')
     } catch (err: any) {
       setError(err.detail ?? 'Invalid Store ID or password.')

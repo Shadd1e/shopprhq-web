@@ -927,9 +927,9 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
     setLoading(true)
     try {
       const data = await merchantLogin(mid.trim().toUpperCase(), pin)
-      localStorage.setItem('m_tok',  data.access_token)
-      localStorage.setItem('m_id',   data.merchant_id)
-      localStorage.setItem('m_name', data.name)
+      sessionStorage.setItem('m_tok',  data.access_token)
+      sessionStorage.setItem('m_id',   data.merchant_id)
+      sessionStorage.setItem('m_name', data.name)
       onSuccess(data.access_token)
     } catch (err: any) {
       setError(err.detail ?? 'Invalid Merchant ID or PIN.')
@@ -1968,14 +1968,14 @@ function DashboardPage() {
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    setToken(localStorage.getItem('m_tok'))
+    setToken(sessionStorage.getItem('m_tok'))
     setChecked(true)
   }, [])
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem('m_tok')
-    localStorage.removeItem('m_id')
-    localStorage.removeItem('m_name')
+    sessionStorage.removeItem('m_tok')
+    sessionStorage.removeItem('m_id')
+    sessionStorage.removeItem('m_name')
     setToken(null)
   }, [])
 

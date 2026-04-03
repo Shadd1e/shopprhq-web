@@ -264,10 +264,10 @@ export default function StoreDashboardPage() {
   const [tab, setTab]       = useState<Tab>('orders')
 
   useEffect(() => {
-    const tok   = localStorage.getItem('tok')
-    const cid   = localStorage.getItem('cid')
-    const cname = localStorage.getItem('cname') ?? ''
-    const mid   = localStorage.getItem('mid')   ?? ''
+    const tok   = sessionStorage.getItem('tok')
+    const cid   = sessionStorage.getItem('cid')
+    const cname = sessionStorage.getItem('cname') ?? ''
+    const mid   = sessionStorage.getItem('mid')   ?? ''
 
     if (!tok || !cid) {
       router.replace('/store-login')
@@ -278,10 +278,10 @@ export default function StoreDashboardPage() {
   }, [router])
 
   function logout() {
-    localStorage.removeItem('tok')
-    localStorage.removeItem('cid')
-    localStorage.removeItem('cname')
-    localStorage.removeItem('mid')
+    sessionStorage.removeItem('tok')
+    sessionStorage.removeItem('cid')
+    sessionStorage.removeItem('cname')
+    sessionStorage.removeItem('mid')
     router.replace('/store-login')
   }
 
