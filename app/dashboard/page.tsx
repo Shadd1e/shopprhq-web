@@ -1402,7 +1402,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
             ) : subaccount ? (
               <>
                 <div className="space-y-0 mb-5">
-                  <Row label="Bank"         value={subaccount.account_bank} />
+                  <Row label="Bank"         value={banks.find(b => b.code === subaccount.account_bank)?.name ?? subaccount.account_bank} />
                   <Row label="Account"      value={`••••${subaccount.account_number.slice(-4)}`} />
                   <Row label="Business"     value={subaccount.business_name} />
                 </div>
@@ -1419,7 +1419,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
                     <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3.5">
                       <p className="text-sm font-semibold text-amber-800 mb-1">This action is final</p>
                       <p className="text-xs text-amber-700 leading-relaxed">
-                        Once removed, <strong>{subaccount.account_bank}</strong> (••••{subaccount.account_number.slice(-4)}) cannot
+                        Once removed, <strong>{banks.find(b => b.code === subaccount.account_bank)?.name ?? subaccount.account_bank}</strong> (••••{subaccount.account_number.slice(-4)}) cannot
                         be linked to this store again. You will need to set up a new payout account.
                       </p>
                     </div>
