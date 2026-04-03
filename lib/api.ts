@@ -63,6 +63,7 @@ export interface Client {
   assistant_personality?: string
   delivery_enabled?: boolean
   delivery_fee?: number
+  has_login?: boolean
 }
 
 export interface InventoryInfo {
@@ -199,6 +200,14 @@ export async function updateDelivery(
     method: 'PATCH',
     headers: bearer(token),
     body: JSON.stringify(data),
+  })
+}
+
+export async function setupStorePassword(token: string, clientId: string, password: string) {
+  return req<{ detail: string; client_id: string }>(`/api/v1/clients/${clientId}/password`, {
+    method: 'PATCH',
+    headers: bearer(token),
+    body: JSON.stringify({ password }),
   })
 }
 

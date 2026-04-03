@@ -7,7 +7,7 @@ import Logo from '@/components/Logo'
 import {
   merchantLogin, getMerchantProfile, resendVerification,
   getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
-  updatePersona, updateDelivery, updateOperatorNumber,
+  updatePersona, updateDelivery, updateOperatorNumber, setupStorePassword,
   getSubaccountBanks, verifyBankAccount, registerSubaccount, getSubaccount, deactivateSubaccount,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
   type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type Subaccount,
@@ -994,10 +994,19 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
   onRefresh: () => void
 }) {
   // ── Store creation ───────────────────────────────────────────────────────
-  const [addOpen,   setAddOpen]   = useState(false)
-  const [storeSaving, setStoreSaving] = useState(false)
-  const [storeErr,  setStoreErr]  = useState('')
-  const [storeForm, setStoreForm] = useState({ name: '', password: '', wa: '' })
+  const [addOpen,      setAddOpen]      = useState(false)
+  const [storeSaving,  setStoreSaving]  = useState(false)
+  const [storeErr,     setStoreErr]     = useState('')
+  const [storeForm,    setStoreForm]    = useState({ name: '', password: '', wa: '' })
+  const [storeStep,    setStoreStep]    = useState<1 | 2>(1)
+  const [storeWaClean, setStoreWaClean] = useState<string | null>(null)
+  const [confirmPw,    setConfirmPw]    = useState('')
+
+  // ── Setup password (for stores without login) ─────────────────────────────
+  const [setupPwTarget,  setSetupPwTarget]  = useState<Client | null>(null)
+  const [setupPwForm,    setSetupPwForm]    = useState({ password: '', confirm: '' })
+  const [setupPwSaving,  setSetupPwSaving]  = useState(false)
+  const [setupPwErr,     setSetupPwErr]     = useState('')
 
   function setSF(k: string) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1005,7 +1014,7 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
     }
   }
 
-  async function handleAddStore(e: React.FormEvent) {
+  function handleAddStore(e: React.FormEvent) {
     e.preventDefault()
     if (!storeForm.name.trim()) return setStoreErr('Store name is required.')
     if (!storeForm.password)    return setStoreErr('Password is required.')
@@ -1019,14 +1028,48 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
         return setStoreErr('WhatsApp number must include country code, e.g. +2348012345678')
       }
     }
+    setStoreWaClean(waClean)
+    setStoreErr('')
+    setConfirmPw('')
+    setStoreStep(2)
+  }
+
+  async function handleConfirmCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!confirmPw) return setStoreErr('Enter your merchant password to confirm.')
     setStoreSaving(true)
     try {
-      await createClient(token, { name: storeForm.name.trim(), password: storeForm.password, whatsapp_number: waClean })
+      // Verify merchant identity before creating the store
+      await merchantLogin(profile?.id ?? '', confirmPw)
+      await createClient(token, {
+        name: storeForm.name.trim(),
+        password: storeForm.password,
+        whatsapp_number: storeWaClean,
+      })
       setAddOpen(false)
       setStoreForm({ name: '', password: '', wa: '' })
+      setConfirmPw('')
+      setStoreStep(1)
       onRefresh()
-    } catch (err: any) { setStoreErr(err.detail ?? 'Could not create store.') }
-    finally { setStoreSaving(false) }
+    } catch (err: any) {
+      setStoreErr(err.detail ?? 'Could not create store.')
+    } finally { setStoreSaving(false) }
+  }
+
+  async function handleSetupPassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!setupPwTarget) return
+    if (!setupPwForm.password) return setSetupPwErr('Password is required.')
+    if (setupPwForm.password.length < 6) return setSetupPwErr('Password must be at least 6 characters.')
+    if (setupPwForm.password !== setupPwForm.confirm) return setSetupPwErr('Passwords do not match.')
+    setSetupPwSaving(true); setSetupPwErr('')
+    try {
+      await setupStorePassword(token, setupPwTarget.id, setupPwForm.password)
+      setSetupPwTarget(null)
+      setSetupPwForm({ password: '', confirm: '' })
+      onRefresh()
+    } catch (err: any) { setSetupPwErr(err.detail ?? 'Could not set password.') }
+    finally { setSetupPwSaving(false) }
   }
 
   // ── Store selector for persona/delivery ──────────────────────────────────
@@ -1241,10 +1284,18 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
         ) : (
           <div className="divide-y divide-border">
             {clients.map(c => (
-              <div key={c.id} className="py-3.5 flex items-center justify-between gap-4">
+              <div key={c.id} className="py-3.5 flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-ink">{c.name || '—'}</p>
                   {c.whatsapp_number && <p className="text-xs text-ink-4 mt-0.5">{c.whatsapp_number}</p>}
+                  {!c.has_login && (
+                    <button
+                      onClick={() => { setSetupPwTarget(c); setSetupPwForm({ password: '', confirm: '' }); setSetupPwErr('') }}
+                      className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-700
+                        bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg hover:bg-amber-100 transition-all">
+                      ⚠ No login — Set password
+                    </button>
+                  )}
                 </div>
                 <span className="font-mono text-xs font-semibold text-ink-3 bg-bg border border-border
                   px-2.5 py-1 rounded-lg shrink-0">{c.id}</span>
@@ -1500,27 +1551,83 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
         </>
       )}
 
-      {/* Add store modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Create store">
-        <form onSubmit={handleAddStore} className="space-y-4">
-          <FormField label="Store name" hint="1–100 characters. e.g. Lagos Branch, Abuja HQ">
-            <input type="text" placeholder="e.g. Lagos Branch" value={storeForm.name}
-              onChange={setSF('name')} className={INPUT} />
+      {/* Add store modal — 2-step */}
+      <Modal open={addOpen} onClose={() => { setAddOpen(false); setStoreStep(1); setStoreErr(''); setConfirmPw('') }}
+        title={storeStep === 1 ? 'Create store' : 'Confirm store creation'}>
+        {storeStep === 1 ? (
+          <form onSubmit={handleAddStore} className="space-y-4">
+            <FormField label="Store name" hint="1–100 characters. e.g. Lagos Branch, Abuja HQ">
+              <input type="text" placeholder="e.g. Lagos Branch" value={storeForm.name}
+                onChange={setSF('name')} className={INPUT} />
+            </FormField>
+            <FormField label="Store password" hint="Minimum 6 characters. Store managers use this to sign in to their dashboard.">
+              <input type="password" placeholder="Min. 6 characters" value={storeForm.password}
+                onChange={setSF('password')} autoComplete="new-password" className={INPUT} />
+            </FormField>
+            <FormField label="WhatsApp number (optional)"
+              hint="Include country code with + sign. e.g. +2348012345678 — can be added later.">
+              <input type="tel" placeholder="+2348012345678" inputMode="tel"
+                value={storeForm.wa} onChange={setSF('wa')} className={INPUT} />
+            </FormField>
+            {storeErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{storeErr}</p>}
+            <button type="submit"
+              className="w-full bg-ink text-white font-semibold text-sm py-3 rounded-xl
+                hover:bg-ink-2 transition-all">
+              Next: Confirm →
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleConfirmCreate} className="space-y-4">
+            {/* Summary */}
+            <div className="bg-bg border border-border rounded-xl px-4 py-3 space-y-1.5 text-sm">
+              <div className="flex justify-between"><span className="text-ink-4">Store name</span><span className="font-semibold text-ink">{storeForm.name}</span></div>
+              <div className="flex justify-between"><span className="text-ink-4">WhatsApp</span><span className="font-semibold text-ink">{storeWaClean ?? 'Not provided'}</span></div>
+            </div>
+            <FormField label="Confirm with your merchant password"
+              hint="Enter your merchant account password to authorise this action.">
+              <input type="password" placeholder="Your merchant password" value={confirmPw}
+                onChange={e => { setConfirmPw(e.target.value); setStoreErr('') }}
+                autoComplete="current-password" className={INPUT} autoFocus />
+            </FormField>
+            {storeErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{storeErr}</p>}
+            <div className="flex gap-3">
+              <button type="button" onClick={() => { setStoreStep(1); setStoreErr('') }}
+                className="flex-1 border border-border text-sm font-semibold text-ink-3 py-3 rounded-xl
+                  hover:bg-bg transition-all">
+                ← Back
+              </button>
+              <button type="submit" disabled={storeSaving}
+                className="flex-1 bg-wa text-white font-semibold text-sm py-3 rounded-xl shadow-wa
+                  hover:bg-wa-dark transition-all disabled:opacity-50">
+                {storeSaving ? 'Creating…' : 'Create store'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Setup password modal — for stores without a login */}
+      <Modal open={!!setupPwTarget} onClose={() => { setSetupPwTarget(null); setSetupPwErr('') }}
+        title={`Set login for ${setupPwTarget?.name ?? 'store'}`}>
+        <form onSubmit={handleSetupPassword} className="space-y-4">
+          <p className="text-sm text-ink-4 leading-relaxed">
+            This store has no login password. Set one so it can be accessed from the store dashboard.
+          </p>
+          <FormField label="New password" hint="Minimum 6 characters.">
+            <input type="password" placeholder="Min. 6 characters" value={setupPwForm.password}
+              onChange={e => { setSetupPwForm(p => ({ ...p, password: e.target.value })); setSetupPwErr('') }}
+              autoComplete="new-password" className={INPUT} />
           </FormField>
-          <FormField label="Store password" hint="Minimum 6 characters. Store managers use this to sign in to their dashboard.">
-            <input type="password" placeholder="Min. 6 characters" value={storeForm.password}
-              onChange={setSF('password')} autoComplete="new-password" className={INPUT} />
+          <FormField label="Confirm password">
+            <input type="password" placeholder="Repeat password" value={setupPwForm.confirm}
+              onChange={e => { setSetupPwForm(p => ({ ...p, confirm: e.target.value })); setSetupPwErr('') }}
+              autoComplete="new-password" className={INPUT} />
           </FormField>
-          <FormField label="WhatsApp number (optional)"
-            hint="Include country code with + sign. e.g. +2348012345678 — can be added later.">
-            <input type="tel" placeholder="+2348012345678" inputMode="tel"
-              value={storeForm.wa} onChange={setSF('wa')} className={INPUT} />
-          </FormField>
-          {storeErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{storeErr}</p>}
-          <button type="submit" disabled={storeSaving}
+          {setupPwErr && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{setupPwErr}</p>}
+          <button type="submit" disabled={setupPwSaving}
             className="w-full bg-wa text-white font-semibold text-sm py-3 rounded-xl shadow-wa
               hover:bg-wa-dark transition-all disabled:opacity-50">
-            {storeSaving ? 'Creating…' : 'Create store'}
+            {setupPwSaving ? 'Saving…' : 'Set password'}
           </button>
         </form>
       </Modal>
