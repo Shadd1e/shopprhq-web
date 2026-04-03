@@ -64,6 +64,7 @@ export interface Client {
   delivery_enabled?: boolean
   delivery_fee?: number
   has_login?: boolean
+  client_changes_enabled?: boolean
 }
 
 export interface InventoryInfo {
