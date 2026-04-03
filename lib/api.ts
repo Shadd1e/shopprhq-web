@@ -223,6 +223,73 @@ export async function updateOperatorNumber(
   })
 }
 
+export async function toggleClientPermissions(token: string, clientId: string, enabled: boolean) {
+  return req<{ detail: string; client_id: string; client_changes_enabled: boolean }>(
+    `/api/v1/clients/${clientId}/client-permissions`,
+    {
+      method: 'PATCH',
+      headers: bearer(token),
+      body: JSON.stringify({ client_changes_enabled: enabled }),
+    },
+  )
+}
+
+// ── Store-scoped (client JWT) ──────────────────────────────────────────────
+
+export interface RevenueSummary {
+  total_revenue: number
+  counts_by_status: Record<string, number>
+  daily: { date: string; revenue: number }[]
+  days: number
+}
+
+export async function getMyStore(token: string) {
+  return req<Client>('/api/v1/clients/me', { headers: bearer(token) })
+}
+
+export async function getStoreOrders(token: string, merchantId: string, clientId: string, status?: string) {
+  const qs = new URLSearchParams({ merchant_id: merchantId, client_id: clientId, limit: '200' })
+  if (status) qs.set('status', status)
+  return req<Order[]>(`/api/v1/orders/?${qs}`, { headers: bearer(token) })
+}
+
+export async function getStoreOrderDetail(token: string, orderId: string, merchantId: string) {
+  return req<OrderDetail>(`/api/v1/orders/${orderId}/detail?merchant_id=${merchantId}`, {
+    headers: bearer(token),
+  })
+}
+
+export async function storeConfirmCashOrder(token: string, orderId: string, merchantId: string) {
+  return req(`/api/v1/orders/${orderId}/confirm-cash?merchant_id=${merchantId}`, {
+    method: 'POST',
+    headers: bearer(token),
+  })
+}
+
+export async function storeDispatchOrder(token: string, orderId: string, merchantId: string) {
+  return req(`/api/v1/orders/${orderId}/mark-out-for-delivery?merchant_id=${merchantId}`, {
+    method: 'POST',
+    headers: bearer(token),
+  })
+}
+
+export async function getRevenueSummary(token: string, merchantId: string, clientId: string, days = 30) {
+  const qs = new URLSearchParams({ merchant_id: merchantId, client_id: clientId, days: String(days) })
+  return req<RevenueSummary>(`/api/v1/orders/revenue-summary?${qs}`, { headers: bearer(token) })
+}
+
+export async function storeUpdateDelivery(
+  token: string,
+  clientId: string,
+  data: { delivery_enabled: boolean; delivery_fee: number },
+) {
+  return req<Client>(`/api/v1/clients/${clientId}/delivery`, {
+    method: 'PATCH',
+    headers: bearer(token),
+    body: JSON.stringify(data),
+  })
+}
+
 // ── Subaccounts (payout accounts, per store) ──────────────────────────────
 
 export interface Subaccount {

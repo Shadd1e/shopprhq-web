@@ -7,7 +7,7 @@ import Logo from '@/components/Logo'
 import {
   merchantLogin, getMerchantProfile, resendVerification,
   getClients, createClient, getInventory, createProduct, updateProduct, updateStock,
-  updatePersona, updateDelivery, updateOperatorNumber, setupStorePassword,
+  updatePersona, updateDelivery, updateOperatorNumber, setupStorePassword, toggleClientPermissions,
   getSubaccountBanks, verifyBankAccount, registerSubaccount, getSubaccount, deactivateSubaccount,
   getOrders, getOrderDetail, confirmCashOrder, dispatchOrder,
   type MerchantProfile, type Client, type Product, type Order, type OrderDetail, type Subaccount,
@@ -984,6 +984,58 @@ function LoginView({ onSuccess }: { onSuccess: (token: string) => void }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// STORE ROW (with permission toggle)
+// ══════════════════════════════════════════════════════════════════════════
+
+function StoreRow({ c, token, onSetupPw, onRefresh }: {
+  c: Client
+  token: string
+  onSetupPw: () => void
+  onRefresh: () => void
+}) {
+  const [toggling, setToggling] = useState(false)
+
+  async function handleToggle() {
+    setToggling(true)
+    try {
+      await toggleClientPermissions(token, c.id, !c.client_changes_enabled)
+      onRefresh()
+    } catch {}
+    finally { setToggling(false) }
+  }
+
+  return (
+    <div className="py-3.5 flex items-start justify-between gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-ink">{c.name || '—'}</p>
+        {c.whatsapp_number && <p className="text-xs text-ink-4 mt-0.5">{c.whatsapp_number}</p>}
+        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+          {!c.has_login && (
+            <button onClick={onSetupPw}
+              className="flex items-center gap-1 text-xs font-semibold text-amber-700
+                bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg hover:bg-amber-100 transition-all">
+              ⚠ No login — Set password
+            </button>
+          )}
+          {/* Allow store to edit settings toggle */}
+          <button onClick={handleToggle} disabled={toggling}
+            className={cn(
+              'flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-lg border transition-all',
+              c.client_changes_enabled
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                : 'bg-bg border-border text-ink-3 hover:text-ink hover:bg-white',
+            )}>
+            {toggling ? '…' : c.client_changes_enabled ? '✓ Store can edit settings' : 'Allow store to edit settings'}
+          </button>
+        </div>
+      </div>
+      <span className="font-mono text-xs font-semibold text-ink-3 bg-bg border border-border
+        px-2.5 py-1 rounded-lg shrink-0">{c.id}</span>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // SETTINGS TAB
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -1284,22 +1336,9 @@ function SettingsTab({ profile, clients, token, onRefresh }: {
         ) : (
           <div className="divide-y divide-border">
             {clients.map(c => (
-              <div key={c.id} className="py-3.5 flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-ink">{c.name || '—'}</p>
-                  {c.whatsapp_number && <p className="text-xs text-ink-4 mt-0.5">{c.whatsapp_number}</p>}
-                  {!c.has_login && (
-                    <button
-                      onClick={() => { setSetupPwTarget(c); setSetupPwForm({ password: '', confirm: '' }); setSetupPwErr('') }}
-                      className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-700
-                        bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg hover:bg-amber-100 transition-all">
-                      ⚠ No login — Set password
-                    </button>
-                  )}
-                </div>
-                <span className="font-mono text-xs font-semibold text-ink-3 bg-bg border border-border
-                  px-2.5 py-1 rounded-lg shrink-0">{c.id}</span>
-              </div>
+              <StoreRow key={c.id} c={c} token={token}
+                onSetupPw={() => { setSetupPwTarget(c); setSetupPwForm({ password: '', confirm: '' }); setSetupPwErr('') }}
+                onRefresh={onRefresh} />
             ))}
           </div>
         )}
