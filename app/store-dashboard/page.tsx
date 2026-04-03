@@ -710,16 +710,18 @@ function SettingsTab({ info, store, onStoreRefresh }: {
             { label: 'Store name',          value: store?.name ?? info.cid },
             { label: 'Store ID',            value: info.cid,  mono: true },
             { label: 'Merchant ID',         value: info.mid,  mono: true },
+            { label: 'Operator number',     value: store?.store_contact_number ?? 'Not set', dim: !store?.store_contact_number },
             { label: 'Customer WhatsApp',   value: store?.whatsapp_number ?? 'Not connected' },
             { label: 'Notification number', value: store?.operator_notify_phone
-                ? `+${store.operator_notify_phone}` : 'Not set — configure in merchant dashboard' },
+                ? `+${store.operator_notify_phone}` : 'Not set — configure in merchant dashboard',
+              dim: !store?.operator_notify_phone },
           ].map(row => (
             <div key={row.label} className="py-3.5 flex items-center justify-between gap-4">
               <span className="text-sm text-ink-3 shrink-0">{row.label}</span>
               <span className={cn(
                 'text-sm font-semibold text-ink text-right',
                 row.mono && 'font-mono text-[13px]',
-                !store?.operator_notify_phone && row.label === 'Notification number' && 'text-ink-4 font-normal text-xs',
+                row.dim && 'text-ink-4 font-normal text-xs',
               )}>
                 {row.value}
               </span>
